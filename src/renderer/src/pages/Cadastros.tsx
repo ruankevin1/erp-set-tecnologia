@@ -20,6 +20,9 @@ type PresencaFilter = 'todos' | 'no_playground' | 'fora'
 type AtividadeFilter = 'todos' | 'hoje' | 'semana' | 'mes' | 'nunca'
 type ViewMode = 'criancas' | 'responsaveis'
 
+let _childrenCache: ChildWithStats[] = []
+let _guardiansCache: GuardianWithStats[] = []
+
 function FilterChip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
     <button
@@ -63,13 +66,13 @@ export function Cadastros() {
   const [searchQuery, setSearchQuery] = useState('')
   const [presencaFilter, setPresencaFilter] = useState<PresencaFilter>('todos')
   const [atividadeFilter, setAtividadeFilter] = useState<AtividadeFilter>('todos')
-  const [children, setChildren] = useState<ChildWithStats[]>([])
-  const [loading, setLoading] = useState(true)
+  const [children, setChildren] = useState<ChildWithStats[]>(_childrenCache)
+  const [loading, setLoading] = useState(_childrenCache.length === 0)
   const [sortBy, setSortBy] = useState<SortKey>('nome')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   // View de responsáveis
-  const [guardians, setGuardians] = useState<GuardianWithStats[]>([])
+  const [guardians, setGuardians] = useState<GuardianWithStats[]>(_guardiansCache)
   const [guardianDetail, setGuardianDetail] = useState<{ guardian: GuardianWithStats; criancas: CriancaComStatus[] } | null>(null)
   const [guardianDetailOpen, setGuardianDetailOpen] = useState(false)
   const [guardianDetailLoading, setGuardianDetailLoading] = useState(false)
@@ -217,8 +220,9 @@ export function Cadastros() {
   }
 
   async function loadGuardians() {
-    setLoading(true)
+    setLoading(_guardiansCache.length === 0)
     const res = await window.api.guardians.listWithStats(estabelecimentoId, searchQuery || undefined)
+    _guardiansCache = res
     setGuardians(res)
     setLoading(false)
   }
@@ -292,8 +296,9 @@ export function Cadastros() {
   }
 
   async function loadChildren() {
-    setLoading(true)
+    setLoading(_childrenCache.length === 0)
     const res = await window.api.children.listWithStats(estabelecimentoId, searchQuery || undefined)
+    _childrenCache = res
     setChildren(res)
     setLoading(false)
   }
