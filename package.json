@@ -1,6 +1,6 @@
 {
   "name": "erp-set-tecnologia",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "ERP Set Tecnologia - Controle de Playground Infantil",
   "main": "./out/main/index.js",
   "scripts": {
@@ -83,8 +83,7 @@
     "publish": {
       "provider": "github",
       "owner": "ruankevin1",
-      "repo": "erp-set-tecnologia",
-      "private": true
+      "repo": "erp-set-tecnologia"
     }
   }
 }
