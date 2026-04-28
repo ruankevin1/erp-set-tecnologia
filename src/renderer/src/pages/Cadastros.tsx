@@ -591,7 +591,7 @@ export function Cadastros() {
                     {searchQuery ? 'Nenhum resultado encontrado' : 'Nenhum responsável cadastrado'}
                   </td></tr>
                 )}
-                {guardians.map((g) => (
+                {!loading && guardians.map((g) => (
                   <tr key={g.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 font-medium">{g.nome}</td>
                     <td className="px-4 py-3 text-muted-foreground">{g.cpf ? maskCPF(g.cpf) : '—'}</td>
@@ -697,7 +697,7 @@ export function Cadastros() {
                   </td>
                 </tr>
               )}
-              {sorted.map((c) => {
+              {!loading && sorted.map((c) => {
                 const ativa = visitasAtivas.some(v => v.crianca_id === c.id) || !!c.visita_ativa
                 return (
                   <tr key={c.id} className="hover:bg-muted/30 transition-colors">
