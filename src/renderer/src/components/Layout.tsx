@@ -48,7 +48,7 @@ export function Layout() {
       <img
         src={setIcon}
         alt="Set Tecnologia"
-        className="fixed bottom-4 right-4 w-32 h-32 rounded-full object-cover opacity-60 pointer-events-none select-none"
+        className="fixed bottom-4 right-4 w-44 h-44 rounded-full object-cover opacity-60 pointer-events-none select-none"
       />
     </div>
   )
