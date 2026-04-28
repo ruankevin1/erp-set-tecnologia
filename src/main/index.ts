@@ -70,7 +70,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     titleBarStyle: 'default',
     title: 'ERP Set Tecnologia',
-    icon: join(__dirname, '../../assets/icon.png'),
+    icon: join(__dirname, process.platform === 'win32' ? '../../assets/icon.ico' : '../../assets/icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

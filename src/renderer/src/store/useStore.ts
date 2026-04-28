@@ -4,6 +4,7 @@ import { ESTABELECIMENTO_ID } from '../lib/supabase'
 
 interface AppState {
   estabelecimentoId: string
+  nomeEstabelecimento: string
   visitasAtivas: Visita[]
   caixaAtual: FechamentoCaixa | null
   caixaCarregado: boolean
@@ -26,6 +27,7 @@ interface AppState {
   setIsOnline: (v: boolean) => void
   setPricingConfigs: (configs: ConfiguracaoPreco[]) => void
   setSimulacaoImpressao: (v: boolean) => void
+  setNomeEstabelecimento: (nome: string) => void
   setLoading: (loading: boolean) => void
   setUpdateAvailable: (version: string) => void
   setUpdateDownloaded: (version: string) => void
@@ -37,6 +39,7 @@ interface AppState {
 
 export const useStore = create<AppState>((set, get) => ({
   estabelecimentoId: ESTABELECIMENTO_ID,
+  nomeEstabelecimento: 'ERP Set Tecnologia',
   visitasAtivas: [],
   caixaAtual: null,
   caixaCarregado: false,
@@ -63,6 +66,7 @@ export const useStore = create<AppState>((set, get) => ({
     localStorage.setItem('simulacaoImpressao', String(v))
     set({ simulacaoImpressao: v })
   },
+  setNomeEstabelecimento: (nome) => set({ nomeEstabelecimento: nome }),
   setLoading: (loading) => set({ loading }),
   setUpdateAvailable: (version) => set({ updateAvailable: true, updateVersion: version }),
   setUpdateDownloaded: (version) => set({ updateDownloaded: true, updateVersion: version }),

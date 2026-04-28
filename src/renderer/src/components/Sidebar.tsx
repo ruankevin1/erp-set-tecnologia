@@ -6,6 +6,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
 import { Badge } from './ui/badge'
+import setIcon from '@/assets/icon.png'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -18,7 +19,7 @@ const navItems = [
 ]
 
 export function Sidebar() {
-  const { visitasAtivas, syncStatus, isSyncing, isOnline, updateDownloaded, updateVersion } = useStore()
+  const { visitasAtivas, syncStatus, isSyncing, isOnline, updateDownloaded, updateVersion, nomeEstabelecimento } = useStore()
   const totalPendente = syncStatus
     ? Object.values(syncStatus.pendentes).reduce((a, b) => a + b, 0)
     : 0
@@ -53,11 +54,8 @@ export function Sidebar() {
       {/* Logo */}
       <div className="px-4 py-5 border-b border-slate-700">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center text-white font-bold text-sm">ST</div>
-          <div>
-            <p className="font-bold text-sm leading-tight">ERP Set Tecnologia</p>
-            <p className="text-xs text-slate-400">Sistema</p>
-          </div>
+          <img src={setIcon} alt="Set Tecnologia" className="w-8 h-8 rounded-full object-cover shrink-0" />
+          <p className="font-bold text-sm leading-tight">{nomeEstabelecimento}</p>
         </div>
       </div>
 
@@ -102,6 +100,11 @@ export function Sidebar() {
           {statusInfo.icon}
           <span className={cn('truncate', statusInfo.color)}>{statusInfo.label}</span>
         </div>
+      </div>
+
+      {/* Rodapé fixo */}
+      <div className="px-4 py-2 border-t border-slate-800">
+        <p className="text-[10px] text-slate-600 text-center">Desenvolvido por Set Tecnologia</p>
       </div>
     </aside>
   )

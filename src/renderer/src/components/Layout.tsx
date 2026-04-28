@@ -6,7 +6,13 @@ import { UpdateBanner } from './UpdateBanner'
 import { useStore } from '@/store/useStore'
 
 export function Layout() {
-  const { setUpdateAvailable, setUpdateDownloaded, setDownloadProgress } = useStore()
+  const { setUpdateAvailable, setUpdateDownloaded, setDownloadProgress, setNomeEstabelecimento } = useStore()
+
+  useEffect(() => {
+    window.api.settings.get('estabelecimento_nome').then((nome) => {
+      if (nome) setNomeEstabelecimento(nome)
+    })
+  }, [])
 
   useEffect(() => {
     if (!window.api.updater) return
