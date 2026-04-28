@@ -1,23 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+export const SUPABASE_URL = 'https://odoglrxtlojkbqhortiy.supabase.co'
 
-function hasValidCredentials(): boolean {
-  return (
-    !!supabaseUrl &&
-    supabaseUrl.startsWith('https://') &&
-    supabaseUrl.includes('.supabase.co') &&
-    !supabaseUrl.includes('your-project') &&
-    !!supabaseKey &&
-    supabaseKey.length > 30 &&
-    !supabaseKey.includes('your-anon-key')
-  )
-}
+// Anon key pública do projeto Supabase — necessária para requests REST
+// PREENCHER com a anon key do painel: supabase.com → projeto → Settings → API
+export const SUPABASE_ANON_KEY = 'PREENCHER_ANON_KEY'
 
-export const supabase = hasValidCredentials()
-  ? (() => { try { return createClient(supabaseUrl, supabaseKey) } catch { return null } })()
-  : null
+export const supabase = (() => {
+  try { return createClient(SUPABASE_URL, SUPABASE_ANON_KEY) } catch { return null }
+})()
 
 export const ESTABELECIMENTO_ID =
   import.meta.env.VITE_ESTABELECIMENTO_ID ?? '539eef80-ec1a-4567-98a2-f5dd0ab1c8c4'

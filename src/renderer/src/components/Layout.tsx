@@ -4,16 +4,29 @@ import { Sidebar } from './Sidebar'
 import { Toaster } from './ui/toaster'
 import { UpdateBanner } from './UpdateBanner'
 import { useStore } from '@/store/useStore'
+import { useAuthStore } from '@/store/useAuthStore'
+import { useToast } from '@/hooks/useToast'
 import setIcon from '@/assets/icon.png'
 
 export function Layout() {
   const { setUpdateAvailable, setUpdateDownloaded, setDownloadProgress, setNomeEstabelecimento } = useStore()
+  const { usuario } = useAuthStore()
+  const { toast } = useToast()
 
   useEffect(() => {
     window.api.settings.get('estabelecimento_nome').then((nome) => {
       if (nome) setNomeEstabelecimento(nome)
     })
   }, [])
+
+  useEffect(() => {
+    if (usuario?.senhapadrao) {
+      toast({
+        title: 'Senha padrão detectada',
+        description: 'Você está usando a senha padrão (admin). Recomendamos trocar em Configurações → Usuários.',
+      })
+    }
+  }, [usuario?.id])
 
   useEffect(() => {
     if (!window.api.updater) return

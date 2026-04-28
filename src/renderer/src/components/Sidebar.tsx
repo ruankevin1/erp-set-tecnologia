@@ -1,24 +1,27 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, LogIn, Monitor, LogOut, BarChart3,
-  Settings, WifiOff, Loader2, CheckCircle, Users, CloudOff, ArrowUpCircle, MessageCircle
+  Settings, WifiOff, Loader2, CheckCircle, Users, CloudOff, ArrowUpCircle, MessageCircle, Power
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
+import { useAuthStore } from '@/store/useAuthStore'
 import { Badge } from './ui/badge'
 
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/entrada', icon: LogIn, label: 'Entrada' },
-  { to: '/cadastros', icon: Users, label: 'Cadastros' },
-  { to: '/monitoramento', icon: Monitor, label: 'Monitoramento' },
-  { to: '/saida', icon: LogOut, label: 'Saída' },
-  { to: '/relatorios', icon: BarChart3, label: 'Relatórios' },
-  { to: '/configuracoes', icon: Settings, label: 'Configurações' }
+const allNavItems = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'operador'] },
+  { to: '/entrada', icon: LogIn, label: 'Entrada', roles: ['admin', 'operador'] },
+  { to: '/cadastros', icon: Users, label: 'Cadastros', roles: ['admin', 'operador'] },
+  { to: '/monitoramento', icon: Monitor, label: 'Monitoramento', roles: ['admin', 'operador'] },
+  { to: '/saida', icon: LogOut, label: 'Saída', roles: ['admin', 'operador'] },
+  { to: '/relatorios', icon: BarChart3, label: 'Relatórios', roles: ['admin'] },
+  { to: '/configuracoes', icon: Settings, label: 'Configurações', roles: ['admin'] },
 ]
 
 export function Sidebar() {
   const { visitasAtivas, syncStatus, isSyncing, isOnline, updateDownloaded, updateVersion, nomeEstabelecimento } = useStore()
+  const { usuario, logout } = useAuthStore()
+  const navItems = allNavItems.filter(item => !usuario || item.roles.includes(usuario.perfil))
   const totalPendente = syncStatus
     ? Object.values(syncStatus.pendentes).reduce((a, b) => a + b, 0)
     : 0
@@ -97,6 +100,27 @@ export function Sidebar() {
           <span className={cn('truncate', statusInfo.color)}>{statusInfo.label}</span>
         </div>
       </div>
+
+      {/* Usuário logado */}
+      {usuario && (
+        <div className="px-4 py-3 border-t border-slate-700">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-slate-200 truncate">{usuario.nome}</p>
+              <p className="text-xs text-slate-400">
+                {usuario.perfil === 'admin' ? 'Administrador' : 'Operador'}
+              </p>
+            </div>
+            <button
+              onClick={logout}
+              title="Sair do sistema"
+              className="text-slate-400 hover:text-red-400 transition-colors p-1"
+            >
+              <Power className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Rodapé fixo */}
       <div className="px-4 py-3 border-t border-slate-800 space-y-2">

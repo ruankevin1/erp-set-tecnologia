@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { CheckCircle, AlertTriangle, Wifi } from 'lucide-react'
+import { CheckCircle, AlertTriangle, RefreshCw } from 'lucide-react'
 import { ESTABELECIMENTO_ID } from '@/lib/supabase'
 
 interface Props {
@@ -11,124 +11,101 @@ interface Props {
 }
 
 export function Ativacao({ onAtivado }: Props) {
-  const [url, setUrl] = useState('')
-  const [anonKey, setAnonKey] = useState('')
-  const [jwtKey, setJwtKey] = useState('')
+  const [chave, setChave] = useState('')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState(false)
 
   async function ativar() {
-    if (!url.trim() || !anonKey.trim() || !jwtKey.trim()) {
-      setErro('Preencha todos os campos.')
+    const chaveT = chave.trim()
+    if (!chaveT) {
+      setErro('Digite a chave de acesso.')
       return
     }
     setLoading(true)
     setErro('')
     try {
-      const res = await window.api.sync.fetchConfig(
-        url.trim(),
-        jwtKey.trim(),
-        ESTABELECIMENTO_ID,
-        anonKey.trim()
-      )
+      const res = await window.api.sync.fetchConfig(chaveT, ESTABELECIMENTO_ID)
       if (!res.success) {
-        setErro(res.error ?? 'Não foi possível conectar. Verifique as credenciais.')
+        setErro('Chave de acesso inválida. Verifique com a Set Tecnologia.')
         setLoading(false)
         return
       }
-      await window.api.settings.set('supabase_url', url.trim())
-      await window.api.settings.set('supabase_anon_key', anonKey.trim())
-      await window.api.settings.set('supabase_key', jwtKey.trim())
+      await window.api.settings.set('supabase_key', chaveT)
       await window.api.settings.set('app_ativado', '1')
       setSucesso(true)
       setTimeout(() => onAtivado(), 1200)
     } catch {
-      setErro('Erro de conexão. Verifique a URL e tente novamente.')
+      setErro('Chave de acesso inválida. Verifique com a Set Tecnologia.')
+      setLoading(false)
     }
-    setLoading(false)
-  }
-
-  async function pularSemSync() {
-    await window.api.settings.set('app_ativado', '1')
-    onAtivado()
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">ERP Set Tecnologia</h1>
-          <p className="text-sm text-muted-foreground">Configure a conexão para começar</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
+      <div className="w-full max-w-sm">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-violet-600 rounded-2xl mb-4 shadow-xl">
+            <span className="text-white text-2xl font-bold tracking-tight">S</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">
+            Bem-vindo ao ERP Set Tecnologia
+          </h1>
+          <p className="text-slate-400 text-sm mt-2 leading-relaxed">
+            Digite a chave de acesso fornecida pela Set Tecnologia para ativar o sistema
+          </p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Wifi className="w-4 h-4" />
-              Conexão com o servidor
-            </CardTitle>
-            <CardDescription>
-              Insira as credenciais fornecidas pela Set Tecnologia
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        {/* Card */}
+        <Card className="border-0 shadow-2xl bg-white">
+          <CardContent className="pt-6 pb-6 space-y-4">
             <div className="space-y-1.5">
-              <Label>URL do projeto</Label>
+              <Label>Chave de acesso</Label>
               <Input
-                value={url}
-                onChange={(e) => { setUrl(e.target.value); setErro('') }}
-                placeholder="https://xxx.supabase.co"
+                value={chave}
+                onChange={(e) => { setChave(e.target.value); setErro('') }}
+                placeholder="Chave fornecida pela Set Tecnologia"
                 autoFocus
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Anon Key</Label>
-              <Input
-                type="password"
-                value={anonKey}
-                onChange={(e) => { setAnonKey(e.target.value); setErro('') }}
-                placeholder="eyJhbGci..."
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Token JWT do cliente</Label>
-              <Input
-                type="password"
-                value={jwtKey}
-                onChange={(e) => { setJwtKey(e.target.value); setErro('') }}
-                placeholder="eyJhbGci..."
-                onKeyDown={(e) => e.key === 'Enter' && ativar()}
+                onKeyDown={(e) => e.key === 'Enter' && !loading && !sucesso && ativar()}
               />
             </div>
 
             {erro && (
-              <div className="flex items-start gap-2 text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2 text-xs">
+              <div className="flex items-start gap-2 text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2 text-sm">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{erro}</span>
               </div>
             )}
 
             {sucesso && (
-              <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 text-xs">
-                <CheckCircle className="w-4 h-4" />
-                <span>Conectado com sucesso! Abrindo o sistema...</span>
+              <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 text-sm">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <span>Sistema ativado com sucesso! Carregando...</span>
               </div>
             )}
 
-            <Button onClick={ativar} disabled={loading || sucesso} className="w-full">
-              {loading ? 'Conectando...' : 'Conectar e ativar'}
-            </Button>
-
-            <button
-              type="button"
-              onClick={pularSemSync}
-              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center pt-1"
+            <Button
+              onClick={ativar}
+              disabled={loading || sucesso}
+              className="w-full bg-violet-600 hover:bg-violet-700"
             >
-              Usar sem sincronização
-            </button>
+              {loading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Verificando...
+                </>
+              ) : (
+                'Ativar sistema'
+              )}
+            </Button>
           </CardContent>
         </Card>
+
+        {/* Rodapé */}
+        <p className="text-center text-slate-500 text-xs mt-6">
+          Sistema fornecido por Set Tecnologia
+        </p>
       </div>
     </div>
   )

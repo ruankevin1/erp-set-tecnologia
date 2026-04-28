@@ -3,6 +3,7 @@ import { app } from 'electron'
 import { join } from 'path'
 import { mkdirSync } from 'fs'
 import { randomUUID } from 'crypto'
+import bcrypt from 'bcryptjs'
 
 let db: Database.Database
 
@@ -179,10 +180,12 @@ function runMigrations(db: Database.Database): void {
   migrateVisitasColunas(db)
   migrateCriancasColunas(db)
   migrateFechamentosCaixaColunas(db)
+  migrateOperadoresColunas(db)
   ensureConfiguracoesSistema(db)
   ensureEstabelecimento(db)
   ensureDefaultPricingConfig(db)
   deduplicatePricingConfigs(db)
+  ensureAdminMaster(db)
 }
 
 function ensureEstabelecimento(db: Database.Database): void {
@@ -283,6 +286,26 @@ function migrateCriancasColunas(db: Database.Database): void {
     (db.prepare('PRAGMA table_info(criancas)').all() as { name: string }[]).map(r => r.name)
   )
   if (!cols.has('cpf')) db.exec('ALTER TABLE criancas ADD COLUMN cpf TEXT')
+}
+
+function migrateOperadoresColunas(db: Database.Database): void {
+  const cols = new Set(
+    (db.prepare('PRAGMA table_info(operadores)').all() as { name: string }[]).map(r => r.name)
+  )
+  if (!cols.has('master')) db.exec('ALTER TABLE operadores ADD COLUMN master INTEGER DEFAULT 0')
+}
+
+function ensureAdminMaster(db: Database.Database): void {
+  const existing = db.prepare('SELECT id FROM operadores WHERE master = 1 LIMIT 1').get()
+  if (!existing) {
+    const estabId = process.env.VITE_ESTABELECIMENTO_ID ?? '539eef80-ec1a-4567-98a2-f5dd0ab1c8c4'
+    const hash = bcrypt.hashSync('admin', 10)
+    db.prepare(`
+      INSERT INTO operadores (id, estabelecimento_id, nome, login, senha_hash, nivel_acesso, master, ativo)
+      VALUES (?, ?, 'Admin Master', 'admin', ?, 'admin', 1, 1)
+    `).run(randomUUID(), estabId, hash)
+    console.log('[DB] Admin master criado')
+  }
 }
 
 function migrateConfiguracoesPrecoColunas(db: Database.Database): void {

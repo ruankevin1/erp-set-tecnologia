@@ -36,6 +36,15 @@ export interface Operador {
   ativo: number
 }
 
+export interface UsuarioItem {
+  id: string
+  nome: string
+  login: string
+  perfil: 'admin' | 'operador'
+  master: number
+  ativo: number
+}
+
 export interface Responsavel {
   id: string
   estabelecimento_id: string

@@ -1,5 +1,6 @@
 import { BrowserWindow } from 'electron'
 import Database from 'better-sqlite3'
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './constants'
 
 const TABLES = [
   'estabelecimentos',
@@ -48,16 +49,14 @@ export function triggerSync(): void {
 
 async function runSync(): Promise<void> {
   if (!_db) return
-  const url = getSetting('supabase_url')
   const key = getSetting('supabase_key')
-  if (!url || !key) return
-  const anonKey = getSetting('supabase_anon_key') || key
+  if (!key) return
 
   _isSyncing = true
   broadcast({ isSyncing: true })
 
   try {
-    await pushToSupabase(_db, url, key, anonKey)
+    await pushToSupabase(_db, SUPABASE_URL, key, SUPABASE_ANON_KEY)
   } catch (err) {
     console.error('[sync-service]', err)
   }

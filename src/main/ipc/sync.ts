@@ -1,6 +1,13 @@
 import { IpcMain } from 'electron'
 import Database from 'better-sqlite3'
 import { triggerSync, pushToSupabase, getPendentes } from '../sync-service'
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../constants'
+
+function getSettingValue(db: Database.Database, key: string): string | null {
+  try {
+    return (db.prepare('SELECT valor FROM configuracoes_sistema WHERE chave = ?').get(key) as any)?.valor ?? null
+  } catch { return null }
+}
 
 export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle('sync:status', () => ({ pendentes: getPendentes(db) }))
@@ -10,12 +17,10 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
     return { ok: true }
   })
 
-  ipcMain.handle('sync:push-data', async (_event, { supabaseUrl, supabaseKey, supabaseAnonKey }: {
-    supabaseUrl: string
-    supabaseKey: string
-    supabaseAnonKey?: string
-  }) => {
-    const result = await pushToSupabase(db, supabaseUrl, supabaseKey, supabaseAnonKey)
+  ipcMain.handle('sync:push-data', async () => {
+    const key = getSettingValue(db, 'supabase_key')
+    if (!key) return { success: false, pushed: {}, errors: ['Chave de acesso não configurada'] }
+    const result = await pushToSupabase(db, SUPABASE_URL, key, SUPABASE_ANON_KEY)
     return { success: result.errors.length === 0, pushed: result.pushed, errors: result.errors }
   })
 
@@ -27,20 +32,19 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
     return { success: true }
   })
 
-  ipcMain.handle('sync:fetch-config', async (_event, { supabaseUrl, supabaseKey, estabelecimentoId, supabaseAnonKey }: {
-    supabaseUrl: string
-    supabaseKey: string
+  ipcMain.handle('sync:fetch-config', async (_event, { supabaseKey, estabelecimentoId }: {
+    supabaseKey?: string
     estabelecimentoId: string
-    supabaseAnonKey?: string
   }) => {
-    const apiKey = supabaseAnonKey || supabaseKey
+    const key = supabaseKey || getSettingValue(db, 'supabase_key')
+    if (!key) return { success: false, error: 'Chave de acesso não configurada' }
     try {
       const res = await fetch(
-        `${supabaseUrl}/rest/v1/configuracoes_preco?estabelecimento_id=eq.${estabelecimentoId}&ativo=eq.1`,
+        `${SUPABASE_URL}/rest/v1/configuracoes_preco?estabelecimento_id=eq.${estabelecimentoId}&ativo=eq.1`,
         {
           headers: {
-            apikey: apiKey,
-            Authorization: `Bearer ${supabaseKey}`,
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${key}`,
             'Content-Type': 'application/json'
           }
         }

@@ -57,10 +57,9 @@ const api = {
   sync: {
     status: () => ipcRenderer.invoke('sync:status'),
     trigger: () => ipcRenderer.invoke('sync:trigger'),
-    fetchConfig: (supabaseUrl: string, supabaseKey: string, estabelecimentoId: string, supabaseAnonKey?: string) =>
-      ipcRenderer.invoke('sync:fetch-config', { supabaseUrl, supabaseKey, estabelecimentoId, supabaseAnonKey }),
-    pushData: (supabaseUrl: string, supabaseKey: string, supabaseAnonKey?: string) =>
-      ipcRenderer.invoke('sync:push-data', { supabaseUrl, supabaseKey, supabaseAnonKey }),
+    fetchConfig: (supabaseKey: string | undefined, estabelecimentoId: string) =>
+      ipcRenderer.invoke('sync:fetch-config', { supabaseKey, estabelecimentoId }),
+    pushData: () => ipcRenderer.invoke('sync:push-data'),
     resetAll: () => ipcRenderer.invoke('sync:reset-all'),
     onStatusUpdate: (callback: (data: { isSyncing: boolean; pendentes?: any }) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data)
@@ -74,6 +73,21 @@ const api = {
     stats: (caixaId: string) => ipcRenderer.invoke('cash:stats', caixaId),
     close: (data: { caixaId: string; observacoes?: string }) => ipcRenderer.invoke('cash:close', data),
     history: (estabelecimentoId: string, limit?: number) => ipcRenderer.invoke('cash:history', { estabelecimentoId, limit })
+  },
+  auth: {
+    login: (login: string, senha: string) =>
+      ipcRenderer.invoke('auth:login', { login, senha }) as Promise<{
+        ok: boolean; erro?: string;
+        usuario?: { id: string; nome: string; login: string; perfil: 'admin' | 'operador'; master: boolean; senhapadrao: boolean }
+      }>,
+  },
+  users: {
+    list: (estabelecimentoId: string) => ipcRenderer.invoke('users:list', estabelecimentoId),
+    create: (data: any) => ipcRenderer.invoke('users:create', data),
+    update: (data: any) => ipcRenderer.invoke('users:update', data),
+    toggleActive: (id: string) => ipcRenderer.invoke('users:toggle-active', { id }),
+    changePassword: (data: { id: string; senhaAtual?: string; novaSenha: string }) =>
+      ipcRenderer.invoke('users:change-password', data) as Promise<{ ok: boolean; erro?: string }>,
   },
   app: {
     openDataFolder: () => ipcRenderer.invoke('app:open-data-folder'),

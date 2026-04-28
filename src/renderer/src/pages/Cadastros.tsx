@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { PrintPreviewModal } from '@/components/PrintPreviewModal'
 import { CaixaFechadoModal } from '@/components/CaixaFechadoModal'
 import { useStore } from '@/store/useStore'
+import { useAuthStore } from '@/store/useAuthStore'
 import { useToast } from '@/hooks/useToast'
 import {
   cn, calcularIdade, formatDate, formatDateTime, formatCurrency, formatDuracao,
@@ -60,6 +61,8 @@ interface EditForm {
 
 export function Cadastros() {
   const { estabelecimentoId, visitasAtivas, caixaAtual, addVisitaAtiva, simulacaoImpressao } = useStore()
+  const { usuario } = useAuthStore()
+  const canDelete = usuario?.perfil === 'admin'
   const { toast } = useToast()
 
   const [viewMode, setViewMode] = useState<ViewMode>('criancas')
@@ -629,15 +632,17 @@ export function Cadastros() {
                             </svg>
                           </Button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
-                          title="Excluir responsável"
-                          onClick={() => openDeleteGuardian(g)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {canDelete && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                            title="Excluir responsável"
+                            onClick={() => openDeleteGuardian(g)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -762,15 +767,17 @@ export function Cadastros() {
                             </svg>
                           </Button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
-                          title="Excluir cadastro"
-                          onClick={() => openDelete(c)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {canDelete && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                            title="Excluir cadastro"
+                            onClick={() => openDelete(c)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

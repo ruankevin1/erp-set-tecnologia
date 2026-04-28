@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   Save, Printer, RefreshCw, CheckCircle, XCircle,
   Plus, Trash2, Lock, Eye, Wifi, Usb, AlertTriangle, Upload, ChevronDown,
-  FolderOpen, RotateCcw
+  FolderOpen, RotateCcw, UserPlus
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -13,7 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PrintPreviewModal } from '@/components/PrintPreviewModal'
 import { useStore } from '@/store/useStore'
+import { useAuthStore } from '@/store/useAuthStore'
 import { useToast } from '@/hooks/useToast'
+import type { UsuarioItem } from '@/types'
 import { cn } from '@/lib/utils'
 import { ESTABELECIMENTO_ID } from '@/lib/supabase'
 import type { FaixaIntermediaria, SyncPushResult } from '@/types'
@@ -38,53 +40,21 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 }
 
 export function Configuracoes() {
-  const [adminOk, setAdminOk] = useState(false)
-  const [adminInput, setAdminInput] = useState('')
-  const [adminErro, setAdminErro] = useState(false)
-
-  function autenticarAdmin() {
-    if (adminInput === 'admin') {
-      setAdminOk(true)
-      setAdminErro(false)
-    } else {
-      setAdminErro(true)
-      setAdminInput('')
-    }
-  }
-
-  if (!adminOk) {
+  const { usuario } = useAuthStore()
+  if (usuario?.perfil !== 'admin') {
     return (
       <div className="min-h-full flex items-center justify-center p-6">
-        <div className="w-full max-w-xs space-y-4">
-          <h1 className="text-xl font-bold text-center">Configurações</h1>
-          <div className="space-y-3">
-            <Input
-              type="password"
-              placeholder="Senha"
-              value={adminInput}
-              autoFocus
-              className={adminErro ? 'border-red-400' : ''}
-              onChange={(e) => { setAdminInput(e.target.value); setAdminErro(false) }}
-              onKeyDown={(e) => e.key === 'Enter' && autenticarAdmin()}
-            />
-            {adminErro && <p className="text-xs text-red-500 text-center">Senha incorreta</p>}
-            <Button className="w-full" onClick={autenticarAdmin} disabled={!adminInput}>
-              <Lock className="w-4 h-4 mr-2" />
-              Acessar
-            </Button>
-          </div>
-        </div>
+        <p className="text-muted-foreground text-sm">Acesso restrito a administradores.</p>
       </div>
     )
   }
-
   return <ConfiguracoesContent />
 }
 
 function ConfiguracoesContent() {
   const { syncStatus, setSyncStatus, simulacaoImpressao, setSimulacaoImpressao, setNomeEstabelecimento } = useStore()
   const [secoesAbertas, setSecoesAbertas] = useState({
-    estab: false, precos: false, impressora: false, ticket: false, supabase: false, sobre: false, ferramentas: false
+    usuarios: false, estab: false, precos: false, impressora: false, ticket: false, supabase: false, sobre: false, ferramentas: false
   })
   function toggleSecao(sec: keyof typeof secoesAbertas) {
     setSecoesAbertas(s => ({ ...s, [sec]: !s[sec] }))
@@ -101,6 +71,18 @@ function ConfiguracoesContent() {
   const [dbPath, setDbPath] = useState('')
   const { toast } = useToast()
 
+  // Usuários
+  const [usuarios, setUsuarios] = useState<UsuarioItem[]>([])
+  const [loadingUsuarios, setLoadingUsuarios] = useState(false)
+  const [modalUsuario, setModalUsuario] = useState<{ open: boolean; editando: UsuarioItem | null }>({ open: false, editando: null })
+  const [modalSenhaUser, setModalSenhaUser] = useState<{ open: boolean; user: UsuarioItem | null }>({ open: false, user: null })
+  const [userForm, setUserForm] = useState({ nome: '', login: '', senha: '', confirmar: '', perfil: 'operador' as 'admin' | 'operador' })
+  const [userFormErro, setUserFormErro] = useState('')
+  const [savingUser, setSavingUser] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({ senhaAtual: '', nova: '', confirmar: '' })
+  const [passwordErro, setPasswordErro] = useState('')
+  const [savingPassword, setSavingPassword] = useState(false)
+
   function autenticarTecnico() {
     if (senhaInput === 'settecnologia') {
       setTecnicoAutenticado(true)
@@ -114,8 +96,6 @@ function ConfiguracoesContent() {
   }
 
   // Supabase
-  const [supabaseUrl, setSupabaseUrl] = useState(import.meta.env.VITE_SUPABASE_URL ?? '')
-  const [supabaseAnonKey, setSupabaseAnonKey] = useState(import.meta.env.VITE_SUPABASE_ANON_KEY ?? '')
   const [supabaseKey, setSupabaseKey] = useState('')
   const [syncLoading, setSyncLoading] = useState(false)
   const [pushLoading, setPushLoading] = useState(false)
@@ -168,8 +148,69 @@ function ConfiguracoesContent() {
     loadSyncStatus()
     loadSettings()
     loadPricing()
+    loadUsuarios()
     window.api.app?.getDbPath().then(setDbPath)
   }, [])
+
+  async function loadUsuarios() {
+    setLoadingUsuarios(true)
+    const lista = await window.api.users.list(ESTABELECIMENTO_ID)
+    setUsuarios(lista as UsuarioItem[])
+    setLoadingUsuarios(false)
+  }
+
+  async function salvarUsuario() {
+    setSavingUser(true)
+    setUserFormErro('')
+    try {
+      const { nome, login, senha, confirmar, perfil } = userForm
+      if (!nome.trim()) { setUserFormErro('Nome obrigatório'); return }
+      if (modalUsuario.editando) {
+        const res = await window.api.users.update({ id: modalUsuario.editando.id, nome, login, perfil })
+        if (!res.ok) { setUserFormErro(res.erro ?? 'Erro ao salvar'); return }
+      } else {
+        if (!login.trim()) { setUserFormErro('Login obrigatório'); return }
+        if (!senha) { setUserFormErro('Senha obrigatória'); return }
+        if (senha !== confirmar) { setUserFormErro('Senhas não conferem'); return }
+        const res = await window.api.users.create({ estabelecimentoId: ESTABELECIMENTO_ID, nome, login, senha, perfil })
+        if (!res.ok) { setUserFormErro(res.erro ?? 'Erro ao criar'); return }
+      }
+      await loadUsuarios()
+      setModalUsuario({ open: false, editando: null })
+      toast({ title: modalUsuario.editando ? 'Usuário atualizado' : 'Usuário criado' })
+    } finally {
+      setSavingUser(false)
+    }
+  }
+
+  async function alterarSenhaUsuario() {
+    if (!modalSenhaUser.user) return
+    setSavingPassword(true)
+    setPasswordErro('')
+    try {
+      const { senhaAtual, nova, confirmar } = passwordForm
+      if (!nova) { setPasswordErro('Nova senha obrigatória'); return }
+      if (nova !== confirmar) { setPasswordErro('Senhas não conferem'); return }
+      if (nova.length < 4) { setPasswordErro('Mínimo 4 caracteres'); return }
+      const data: { id: string; senhaAtual?: string; novaSenha: string } = { id: modalSenhaUser.user.id, novaSenha: nova }
+      if (modalSenhaUser.user.master) data.senhaAtual = senhaAtual
+      const res = await window.api.users.changePassword(data)
+      if (!res.ok) { setPasswordErro(res.erro ?? 'Erro ao alterar senha'); return }
+      setModalSenhaUser({ open: false, user: null })
+      toast({ title: 'Senha alterada com sucesso' })
+    } finally {
+      setSavingPassword(false)
+    }
+  }
+
+  async function toggleAtivoUsuario(u: UsuarioItem) {
+    const res = await window.api.users.toggleActive(u.id)
+    if (!res.ok) {
+      toast({ title: 'Erro', description: (res as any).erro, variant: 'destructive' })
+      return
+    }
+    await loadUsuarios()
+  }
 
   async function loadSyncStatus() {
     const s = await window.api.sync.status()
@@ -195,9 +236,6 @@ function ConfiguracoesContent() {
     setTicketRodape1(all['rodape_ticket'] ?? 'Agradecemos sua visita!')
     setTicketRodape2(all['ticket_rodape2'] ?? '')
 
-    // Credenciais Supabase salvas prevalecem sobre env vars
-    if (all['supabase_url']) setSupabaseUrl(all['supabase_url'])
-    if (all['supabase_anon_key']) setSupabaseAnonKey(all['supabase_anon_key'])
     if (all['supabase_key']) setSupabaseKey(all['supabase_key'])
   }
 
@@ -347,7 +385,7 @@ function ConfiguracoesContent() {
   async function sincronizar() {
     setSyncLoading(true)
     try {
-      const res = await window.api.sync.fetchConfig(supabaseUrl, supabaseKey, ESTABELECIMENTO_ID, supabaseAnonKey || undefined)
+      const res = await window.api.sync.fetchConfig(undefined, ESTABELECIMENTO_ID)
       if (res.success) {
         toast({ title: 'Sincronizado!', description: `${res.count} configurações de preço importadas.` })
         await loadSyncStatus()
@@ -363,7 +401,7 @@ function ConfiguracoesContent() {
   async function enviarDados() {
     setPushLoading(true)
     try {
-      const res: SyncPushResult = await window.api.sync.pushData(supabaseUrl, supabaseKey, supabaseAnonKey || undefined)
+      const res: SyncPushResult = await window.api.sync.pushData()
       if (res.errors.length > 0) {
         toast({ title: 'Erro no sync', description: res.errors[0], variant: 'destructive' })
       } else {
@@ -381,7 +419,7 @@ function ConfiguracoesContent() {
     setForceLoading(true)
     try {
       await window.api.sync.resetAll()
-      const res: SyncPushResult = await window.api.sync.pushData(supabaseUrl, supabaseKey, supabaseAnonKey || undefined)
+      const res: SyncPushResult = await window.api.sync.pushData()
       if (res.errors.length > 0) {
         toast({ title: 'Erro no sync', description: res.errors[0], variant: 'destructive' })
       } else {
@@ -410,12 +448,10 @@ function ConfiguracoesContent() {
     window.api.app.resetInstallation()
   }
 
-  async function salvarSupabase() {
+  async function salvarChave() {
     setSavingSupabase(true)
-    await window.api.settings.set('supabase_url', supabaseUrl)
-    await window.api.settings.set('supabase_anon_key', supabaseAnonKey)
     await window.api.settings.set('supabase_key', supabaseKey)
-    toast({ title: 'Credenciais salvas!' })
+    toast({ title: 'Chave de acesso salva!' })
     setSavingSupabase(false)
   }
 
@@ -439,6 +475,102 @@ function ConfiguracoesContent() {
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6 pb-12">
       <h1 className="text-2xl font-bold">Configurações</h1>
+
+      {/* Status de sincronização — visível para todos */}
+      <div className="flex items-center justify-between rounded-lg border px-4 py-3 bg-card">
+        <span className="text-sm text-muted-foreground">Sincronização com a nuvem</span>
+        {totalPendente === 0 ? (
+          <Badge variant="outline" className="border-green-500 text-green-700 flex items-center gap-1">
+            <CheckCircle className="w-3 h-3" /> Sincronizado
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-yellow-500 text-yellow-700 flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" /> Offline — {totalPendente} pendente{totalPendente !== 1 ? 's' : ''}
+          </Badge>
+        )}
+      </div>
+
+      {/* 0 — Usuários */}
+      <Card>
+        <CardHeader
+          className="cursor-pointer select-none flex flex-row items-center justify-between"
+          onClick={() => toggleSecao('usuarios')}
+        >
+          <div>
+            <CardTitle className="text-base">Usuários</CardTitle>
+            <CardDescription>Gerencie os usuários do sistema</CardDescription>
+          </div>
+          <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.usuarios ? 'rotate-180' : '')} />
+        </CardHeader>
+        {secoesAbertas.usuarios && (
+          <CardContent className="space-y-4">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-muted-foreground">{usuarios.length} usuário{usuarios.length !== 1 ? 's' : ''}</p>
+              <Button size="sm" onClick={() => {
+                setUserForm({ nome: '', login: '', senha: '', confirmar: '', perfil: 'operador' })
+                setUserFormErro('')
+                setModalUsuario({ open: true, editando: null })
+              }}>
+                <UserPlus className="w-4 h-4 mr-2" />
+                Novo usuário
+              </Button>
+            </div>
+            {loadingUsuarios ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Carregando...</p>
+            ) : (
+              <div className="border rounded-md divide-y">
+                {usuarios.map(u => (
+                  <div key={u.id} className="flex items-center justify-between px-3 py-2.5 hover:bg-muted/30">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{u.nome}</p>
+                        <p className="text-xs text-muted-foreground">{u.login}</p>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        {Boolean(u.master) && (
+                          <Badge variant="outline" className="text-xs border-violet-300 text-violet-700">Master</Badge>
+                        )}
+                        <Badge variant="secondary" className="text-xs">
+                          {u.perfil === 'admin' ? 'Admin' : 'Operador'}
+                        </Badge>
+                        {!u.ativo && (
+                          <Badge variant="outline" className="text-xs text-muted-foreground">Inativo</Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => {
+                        setUserForm({ nome: u.nome, login: u.login, senha: '', confirmar: '', perfil: u.perfil })
+                        setUserFormErro('')
+                        setModalUsuario({ open: true, editando: u })
+                      }}>
+                        Editar
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => {
+                        setPasswordForm({ senhaAtual: '', nova: '', confirmar: '' })
+                        setPasswordErro('')
+                        setModalSenhaUser({ open: true, user: u })
+                      }}>
+                        Senha
+                      </Button>
+                      {!Boolean(u.master) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={cn('h-7 px-2 text-xs', u.ativo ? 'text-red-500 hover:text-red-700' : 'text-green-600 hover:text-green-700')}
+                          onClick={() => toggleAtivoUsuario(u)}
+                        >
+                          {u.ativo ? 'Desativar' : 'Ativar'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
 
       {/* 1 — Dados do Estabelecimento */}
       <Card>
@@ -828,42 +960,41 @@ function ConfiguracoesContent() {
         </CardContent>}
       </Card>
 
-      {/* 5 — Supabase (técnico) */}
+      {/* 5 — Sincronização (técnico) */}
       {tecnicoAutenticado && <Card>
         <CardHeader
           className="cursor-pointer select-none flex flex-row items-center justify-between"
           onClick={() => toggleSecao('supabase')}
         >
           <div>
-            <CardTitle className="text-base">Supabase / Sincronização</CardTitle>
-            <CardDescription>Configure a conexão com o banco em nuvem</CardDescription>
+            <CardTitle className="text-base">Sincronização</CardTitle>
+            <CardDescription>Chave de acesso ao servidor e ferramentas de sync</CardDescription>
           </div>
           <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.supabase ? 'rotate-180' : '')} />
         </CardHeader>
         {secoesAbertas.supabase && <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <Label>URL do projeto</Label>
-            <Input value={supabaseUrl} onChange={(e) => setSupabaseUrl(e.target.value)} placeholder="https://xxx.supabase.co" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Anon Key do projeto</Label>
-            <Input value={supabaseAnonKey} onChange={(e) => setSupabaseAnonKey(e.target.value)} placeholder="eyJhbGci... (chave anon do projeto)" type="password" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Token JWT do cliente</Label>
-            <Input value={supabaseKey} onChange={(e) => setSupabaseKey(e.target.value)} placeholder="eyJhbGci... (token gerado por generate-token)" type="password" />
+            <Label>Chave de acesso</Label>
+            <p className="text-xs text-muted-foreground">Chave fornecida pela Set Tecnologia</p>
+            <Input
+              value={supabaseKey}
+              onChange={(e) => setSupabaseKey(e.target.value)}
+              placeholder="eyJhbGci... (chave de acesso)"
+              type="password"
+            />
           </div>
           <Button
             variant="outline"
             size="sm"
-            onClick={salvarSupabase}
-            disabled={savingSupabase || !supabaseUrl || !supabaseAnonKey}
+            onClick={salvarChave}
+            disabled={savingSupabase || !supabaseKey}
           >
             <Save className="w-3.5 h-3.5 mr-2" />
-            {savingSupabase ? 'Salvando...' : 'Salvar credenciais'}
+            {savingSupabase ? 'Salvando...' : 'Salvar chave'}
           </Button>
+
           <div className="space-y-3 pt-2">
-            {/* Status de pendentes */}
+            {/* Status detalhado de pendentes */}
             <div className="text-sm">
               {totalPendente > 0 ? (
                 <div className="space-y-1">
@@ -898,19 +1029,19 @@ function ConfiguracoesContent() {
                 <div className="px-3 pb-3 pt-1 flex flex-wrap gap-2 border-t">
                   <Button
                     onClick={enviarDados}
-                    disabled={pushLoading || !supabaseUrl || !supabaseAnonKey || !supabaseKey || totalPendente === 0}
+                    disabled={pushLoading || !supabaseKey || totalPendente === 0}
                   >
                     <Upload className={`w-4 h-4 mr-2 ${pushLoading ? 'animate-pulse' : ''}`} />
                     {pushLoading ? 'Enviando...' : 'Enviar dados locais'}
                   </Button>
-                  <Button variant="outline" onClick={sincronizar} disabled={syncLoading || !supabaseUrl || !supabaseAnonKey}>
+                  <Button variant="outline" onClick={sincronizar} disabled={syncLoading || !supabaseKey}>
                     <RefreshCw className={`w-4 h-4 mr-2 ${syncLoading ? 'animate-spin' : ''}`} />
                     Importar preços
                   </Button>
                   <Button
                     variant="outline"
                     onClick={forcarSyncCompleto}
-                    disabled={forceLoading || !supabaseUrl || !supabaseAnonKey || !supabaseKey}
+                    disabled={forceLoading || !supabaseKey}
                     className="text-orange-600 border-orange-400 hover:bg-orange-50"
                   >
                     <RefreshCw className={`w-4 h-4 mr-2 ${forceLoading ? 'animate-spin' : ''}`} />
@@ -1061,6 +1192,139 @@ function ConfiguracoesContent() {
                 disabled={!senhaResetInput || resettingApp}
               >
                 {resettingApp ? 'Resetando...' : 'Confirmar reset'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Criar/Editar Usuário */}
+      <Dialog
+        open={modalUsuario.open}
+        onOpenChange={(v) => { if (!v) { setModalUsuario({ open: false, editando: null }); setUserFormErro('') } }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{modalUsuario.editando ? 'Editar usuário' : 'Novo usuário'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="space-y-1.5">
+              <Label>Nome *</Label>
+              <Input
+                value={userForm.nome}
+                onChange={(e) => setUserForm(f => ({ ...f, nome: e.target.value }))}
+                placeholder="Nome completo"
+                autoFocus
+              />
+            </div>
+            {!modalUsuario.editando?.master && (
+              <div className="space-y-1.5">
+                <Label>Login *</Label>
+                <Input
+                  value={userForm.login}
+                  onChange={(e) => setUserForm(f => ({ ...f, login: e.target.value }))}
+                  placeholder="Nome de usuário (sem espaços)"
+                  disabled={Boolean(modalUsuario.editando)}
+                />
+              </div>
+            )}
+            {!modalUsuario.editando && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Senha *</Label>
+                  <Input
+                    type="password"
+                    value={userForm.senha}
+                    onChange={(e) => setUserForm(f => ({ ...f, senha: e.target.value }))}
+                    placeholder="Senha"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Confirmar senha *</Label>
+                  <Input
+                    type="password"
+                    value={userForm.confirmar}
+                    onChange={(e) => setUserForm(f => ({ ...f, confirmar: e.target.value }))}
+                    placeholder="Confirmar senha"
+                  />
+                </div>
+              </>
+            )}
+            {!modalUsuario.editando?.master && (
+              <div className="space-y-1.5">
+                <Label>Perfil</Label>
+                <Select value={userForm.perfil} onValueChange={(v) => setUserForm(f => ({ ...f, perfil: v as 'admin' | 'operador' }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="operador">Operador</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {userFormErro && <p className="text-xs text-red-500">{userFormErro}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => setModalUsuario({ open: false, editando: null })}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={salvarUsuario} disabled={savingUser}>
+                {savingUser ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Alterar Senha do Usuário */}
+      <Dialog
+        open={modalSenhaUser.open}
+        onOpenChange={(v) => { if (!v) { setModalSenhaUser({ open: false, user: null }); setPasswordErro('') } }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Alterar senha — {modalSenhaUser.user?.nome}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            {Boolean(modalSenhaUser.user?.master) && (
+              <div className="space-y-1.5">
+                <Label>Senha atual *</Label>
+                <Input
+                  type="password"
+                  value={passwordForm.senhaAtual}
+                  onChange={(e) => setPasswordForm(f => ({ ...f, senhaAtual: e.target.value }))}
+                  placeholder="Senha atual"
+                  autoFocus
+                />
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label>Nova senha *</Label>
+              <Input
+                type="password"
+                value={passwordForm.nova}
+                onChange={(e) => setPasswordForm(f => ({ ...f, nova: e.target.value }))}
+                placeholder="Nova senha"
+                autoFocus={!modalSenhaUser.user?.master}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Confirmar nova senha *</Label>
+              <Input
+                type="password"
+                value={passwordForm.confirmar}
+                onChange={(e) => setPasswordForm(f => ({ ...f, confirmar: e.target.value }))}
+                placeholder="Confirmar nova senha"
+              />
+            </div>
+            {passwordErro && <p className="text-xs text-red-500">{passwordErro}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => setModalSenhaUser({ open: false, user: null })}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={alterarSenhaUsuario} disabled={savingPassword}>
+                {savingPassword ? 'Salvando...' : 'Salvar'}
               </Button>
             </div>
           </div>
