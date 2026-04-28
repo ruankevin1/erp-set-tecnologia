@@ -583,9 +583,6 @@ export function Cadastros() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {loading && (
-                  <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</td></tr>
-                )}
                 {!loading && guardians.length === 0 && (
                   <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">
                     {searchQuery ? 'Nenhum resultado encontrado' : 'Nenhum responsável cadastrado'}
@@ -685,11 +682,6 @@ export function Cadastros() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {loading && (
-                <tr>
-                  <td colSpan={11} className="text-center py-8 text-muted-foreground">Carregando...</td>
-                </tr>
-              )}
               {!loading && sorted.length === 0 && (
                 <tr>
                   <td colSpan={11} className="text-center py-8 text-muted-foreground">
