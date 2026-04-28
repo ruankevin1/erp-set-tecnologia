@@ -120,6 +120,11 @@ const api = {
       ipcRenderer.on('updater:update-downloaded', handler)
       return () => ipcRenderer.removeListener('updater:update-downloaded', handler)
     },
+    onError: (cb: (data: { message: string }) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, data: { message: string }) => cb(data)
+      ipcRenderer.on('updater:error', handler)
+      return () => ipcRenderer.removeListener('updater:error', handler)
+    },
     startDownload: () => ipcRenderer.invoke('updater:start-download'),
     install: () => ipcRenderer.invoke('updater:install'),
   }

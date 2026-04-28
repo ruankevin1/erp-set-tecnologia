@@ -50,6 +50,7 @@ function setupAutoUpdater(): void {
 
   autoUpdater.on('error', (err) => {
     console.error('[updater] Erro:', err.message)
+    mainWindow?.webContents.send('updater:error', { message: err.message })
   })
 
   ipcMain.handle('updater:start-download', async () => {

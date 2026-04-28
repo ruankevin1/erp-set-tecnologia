@@ -43,10 +43,14 @@ export function Layout() {
       setDownloadProgress(null)
       setUpdateDownloaded(version)
     })
+    const offError = window.api.updater.onError(({ message }) => {
+      toast({ title: 'Erro ao verificar atualizações', description: message, variant: 'destructive' })
+    })
     return () => {
       offAvailable()
       offProgress()
       offDownloaded()
+      offError()
     }
   }, [])
 
