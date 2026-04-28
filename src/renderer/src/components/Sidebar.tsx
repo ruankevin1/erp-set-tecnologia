@@ -1,12 +1,11 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, LogIn, Monitor, LogOut, BarChart3,
-  Settings, WifiOff, Loader2, CheckCircle, Users, CloudOff, ArrowUpCircle
+  Settings, WifiOff, Loader2, CheckCircle, Users, CloudOff, ArrowUpCircle, MessageCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
 import { Badge } from './ui/badge'
-import setIcon from '@/assets/icon.png'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -100,9 +99,18 @@ export function Sidebar() {
       </div>
 
       {/* Rodapé fixo */}
-      <div className="px-4 py-3 border-t border-slate-800 flex items-center gap-3">
-        <img src={setIcon} alt="Set Tecnologia" className="w-16 h-16 rounded-full object-cover opacity-80 shrink-0" />
-        <p className="text-[10px] text-slate-500 leading-tight">Desenvolvido por<br />Set Tecnologia</p>
+      <div className="px-4 py-3 border-t border-slate-800 space-y-2">
+        <div>
+          <p className="text-[10px] text-slate-500">Desenvolvido por Set Tecnologia</p>
+          <p className="text-[10px] text-slate-500">(54) 9 9297-7120</p>
+        </div>
+        <button
+          onClick={() => window.open('https://wa.me/5554992977120?text=Olá,%20preciso%20de%20suporte%20no%20ERP%20Set%20Tecnologia')}
+          className="flex items-center gap-1.5 text-[11px] text-green-400 hover:text-green-300 transition-colors"
+        >
+          <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+          Suporte via WhatsApp
+        </button>
       </div>
     </aside>
   )

@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar'
 import { Toaster } from './ui/toaster'
 import { UpdateBanner } from './UpdateBanner'
 import { useStore } from '@/store/useStore'
+import setIcon from '@/assets/icon.png'
 
 export function Layout() {
   const { setUpdateAvailable, setUpdateDownloaded, setDownloadProgress, setNomeEstabelecimento } = useStore()
@@ -44,6 +45,11 @@ export function Layout() {
         </div>
       </main>
       <Toaster />
+      <img
+        src={setIcon}
+        alt="Set Tecnologia"
+        className="fixed bottom-4 right-4 w-20 h-20 rounded-full object-cover opacity-20 pointer-events-none select-none"
+      />
     </div>
   )
 }
