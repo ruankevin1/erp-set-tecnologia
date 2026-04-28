@@ -100,9 +100,9 @@ export function Sidebar() {
       </div>
 
       {/* Rodapé fixo */}
-      <div className="px-4 py-3 border-t border-slate-800 flex flex-col items-center gap-1">
-        <img src={setIcon} alt="Set Tecnologia" className="w-12 h-12 rounded-full object-cover opacity-80" />
-        <p className="text-[10px] text-slate-500">Desenvolvido por Set Tecnologia</p>
+      <div className="px-4 py-3 border-t border-slate-800 flex items-center gap-3">
+        <img src={setIcon} alt="Set Tecnologia" className="w-10 h-10 rounded-full object-cover opacity-80 shrink-0" />
+        <p className="text-[10px] text-slate-500 leading-tight">Desenvolvido por<br />Set Tecnologia</p>
       </div>
     </aside>
   )
