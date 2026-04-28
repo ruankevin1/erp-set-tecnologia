@@ -52,8 +52,8 @@ export function Sidebar() {
   return (
     <aside className="w-56 bg-slate-900 text-slate-100 flex flex-col h-screen shrink-0">
       {/* Logo */}
-      <div className="px-4 py-5 border-b border-slate-700">
-        <p className="font-bold text-sm leading-tight">{nomeEstabelecimento}</p>
+      <div className="px-4 py-5 border-b border-slate-700 flex items-center justify-center">
+        <p className="font-bold text-sm text-center leading-tight">{nomeEstabelecimento}</p>
       </div>
 
       {/* Nav */}
