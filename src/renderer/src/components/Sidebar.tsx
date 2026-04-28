@@ -101,12 +101,12 @@ export function Sidebar() {
       {/* Rodapé fixo */}
       <div className="px-4 py-3 border-t border-slate-800 space-y-2">
         <div>
-          <p className="text-[10px] text-slate-500">Desenvolvido por Set Tecnologia</p>
-          <p className="text-[10px] text-slate-500">(54) 9 9297-7120</p>
+          <p className="text-xs text-slate-400 font-medium">Desenvolvido por Set Tecnologia</p>
+          <p className="text-xs text-slate-500">(54) 9 9297-7120</p>
         </div>
         <button
           onClick={() => window.open('https://wa.me/5554992977120?text=Olá,%20preciso%20de%20suporte%20no%20ERP%20Set%20Tecnologia')}
-          className="flex items-center gap-1.5 text-[11px] text-green-400 hover:text-green-300 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-green-400 hover:text-green-300 transition-colors"
         >
           <MessageCircle className="w-3.5 h-3.5 shrink-0" />
           Suporte via WhatsApp
