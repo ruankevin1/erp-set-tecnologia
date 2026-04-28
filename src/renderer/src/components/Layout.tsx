@@ -1,0 +1,43 @@
+import { useEffect } from 'react'
+import { Outlet } from 'react-router-dom'
+import { Sidebar } from './Sidebar'
+import { Toaster } from './ui/toaster'
+import { UpdateBanner } from './UpdateBanner'
+import { useStore } from '@/store/useStore'
+
+export function Layout() {
+  const { setUpdateAvailable, setUpdateDownloaded, setDownloadProgress } = useStore()
+
+  useEffect(() => {
+    if (!window.api.updater) return
+
+    const offAvailable = window.api.updater.onUpdateAvailable(({ version }) => {
+      setUpdateAvailable(version)
+    })
+    const offProgress = window.api.updater.onDownloadProgress(({ percent }) => {
+      setDownloadProgress(percent)
+    })
+    const offDownloaded = window.api.updater.onUpdateDownloaded(({ version }) => {
+      setDownloadProgress(null)
+      setUpdateDownloaded(version)
+    })
+    return () => {
+      offAvailable()
+      offProgress()
+      offDownloaded()
+    }
+  }, [])
+
+  return (
+    <div className="flex h-screen bg-background overflow-hidden">
+      <Sidebar />
+      <main className="flex-1 overflow-auto flex flex-col">
+        <UpdateBanner />
+        <div className="flex-1 max-w-[1440px] mx-auto w-full">
+          <Outlet />
+        </div>
+      </main>
+      <Toaster />
+    </div>
+  )
+}

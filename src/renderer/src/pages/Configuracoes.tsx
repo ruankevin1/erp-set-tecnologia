@@ -1,0 +1,1076 @@
+import { useState, useEffect } from 'react'
+import {
+  Save, Printer, RefreshCw, CheckCircle, XCircle,
+  Plus, Trash2, Lock, Eye, Wifi, Usb, AlertTriangle, Upload, ChevronDown,
+  FolderOpen, RotateCcw
+} from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { PrintPreviewModal } from '@/components/PrintPreviewModal'
+import { useStore } from '@/store/useStore'
+import { useToast } from '@/hooks/useToast'
+import { cn } from '@/lib/utils'
+import { ESTABELECIMENTO_ID } from '@/lib/supabase'
+import type { FaixaIntermediaria, SyncPushResult } from '@/types'
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        checked ? 'bg-violet-600' : 'bg-slate-200'
+      )}
+    >
+      <span className={cn(
+        'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform',
+        checked ? 'translate-x-4' : 'translate-x-0'
+      )} />
+    </button>
+  )
+}
+
+export function Configuracoes() {
+  const [adminOk, setAdminOk] = useState(false)
+  const [adminInput, setAdminInput] = useState('')
+  const [adminErro, setAdminErro] = useState(false)
+
+  function autenticarAdmin() {
+    if (adminInput === 'admin') {
+      setAdminOk(true)
+      setAdminErro(false)
+    } else {
+      setAdminErro(true)
+      setAdminInput('')
+    }
+  }
+
+  if (!adminOk) {
+    return (
+      <div className="min-h-full flex items-center justify-center p-6">
+        <div className="w-full max-w-xs space-y-4">
+          <h1 className="text-xl font-bold text-center">Configurações</h1>
+          <div className="space-y-3">
+            <Input
+              type="password"
+              placeholder="Senha"
+              value={adminInput}
+              autoFocus
+              className={adminErro ? 'border-red-400' : ''}
+              onChange={(e) => { setAdminInput(e.target.value); setAdminErro(false) }}
+              onKeyDown={(e) => e.key === 'Enter' && autenticarAdmin()}
+            />
+            {adminErro && <p className="text-xs text-red-500 text-center">Senha incorreta</p>}
+            <Button className="w-full" onClick={autenticarAdmin} disabled={!adminInput}>
+              <Lock className="w-4 h-4 mr-2" />
+              Acessar
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return <ConfiguracoesContent />
+}
+
+function ConfiguracoesContent() {
+  const { syncStatus, setSyncStatus, simulacaoImpressao, setSimulacaoImpressao } = useStore()
+  const [secoesAbertas, setSecoesAbertas] = useState({
+    estab: false, precos: false, impressora: false, ticket: false, supabase: false, sobre: false, ferramentas: false
+  })
+  function toggleSecao(sec: keyof typeof secoesAbertas) {
+    setSecoesAbertas(s => ({ ...s, [sec]: !s[sec] }))
+  }
+  const [avancadoAberto, setAvancadoAberto] = useState(false)
+  const [tecnicoAutenticado, setTecnicoAutenticado] = useState(false)
+  const [modalSenhaAberto, setModalSenhaAberto] = useState(false)
+  const [senhaInput, setSenhaInput] = useState('')
+  const [senhaErro, setSenhaErro] = useState(false)
+  const [modalResetAberto, setModalResetAberto] = useState(false)
+  const [senhaResetInput, setSenhaResetInput] = useState('')
+  const [senhaResetErro, setSenhaResetErro] = useState(false)
+  const [resettingApp, setResettingApp] = useState(false)
+  const [dbPath, setDbPath] = useState('')
+  const { toast } = useToast()
+
+  function autenticarTecnico() {
+    if (senhaInput === 'settecnologia') {
+      setTecnicoAutenticado(true)
+      setModalSenhaAberto(false)
+      setSenhaInput('')
+      setSenhaErro(false)
+    } else {
+      setSenhaErro(true)
+      setSenhaInput('')
+    }
+  }
+
+  // Supabase
+  const [supabaseUrl, setSupabaseUrl] = useState(import.meta.env.VITE_SUPABASE_URL ?? '')
+  const [supabaseAnonKey, setSupabaseAnonKey] = useState(import.meta.env.VITE_SUPABASE_ANON_KEY ?? '')
+  const [supabaseKey, setSupabaseKey] = useState('')
+  const [syncLoading, setSyncLoading] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+  const [forceLoading, setForceLoading] = useState(false)
+  const [savingSupabase, setSavingSupabase] = useState(false)
+
+  // Dados do estabelecimento
+  const [estabNome, setEstabNome] = useState('PlayKids')
+  const [estabUnidade, setEstabUnidade] = useState('')
+  const [estabTel1, setEstabTel1] = useState('')
+  const [estabTel2, setEstabTel2] = useState('')
+  const [savingEstab, setSavingEstab] = useState(false)
+
+  // Tabela de preços
+  const [precoBase, setPrecoBase] = useState(25)
+  const [minutosBase, setMinutosBase] = useState(30)
+  const [faixas, setFaixas] = useState<FaixaIntermediaria[]>([
+    { ate_minutos: 45, valor: 30 },
+    { ate_minutos: 60, valor: 35 },
+  ])
+  const [valorBloco, setValorBloco] = useState(5)
+  const [minutosPorBloco, setMinutosPorBloco] = useState(15)
+  const [aplicarAtivas, setAplicarAtivas] = useState(false)
+  const [visitasAtivasCount, setVisitasAtivasCount] = useState(0)
+  const [savingPreco, setSavingPreco] = useState(false)
+
+  // Impressora
+  const [printerType, setPrinterType] = useState<'usb' | 'network'>('network')
+  const [printerIp, setPrinterIp] = useState('192.168.1.100')
+  const [printerPort, setPrinterPort] = useState('9100')
+  const [printerUsbName, setPrinterUsbName] = useState('')
+  const [usbPrinters, setUsbPrinters] = useState<string[]>([])
+  const [loadingUsbPrinters, setLoadingUsbPrinters] = useState(false)
+  const [printerOk, setPrinterOk] = useState<boolean | null>(null)
+  const [printerLoading, setPrinterLoading] = useState(false)
+  const [savingPrinter, setSavingPrinter] = useState(false)
+
+  // Personalização do ticket
+  const [ticketExibirCodigo, setTicketExibirCodigo] = useState(true)
+  const [ticketExibirEntrada, setTicketExibirEntrada] = useState(true)
+  const [ticketExibirTabela, setTicketExibirTabela] = useState(true)
+  const [ticketRodape1, setTicketRodape1] = useState('Agradecemos sua visita!')
+  const [ticketRodape2, setTicketRodape2] = useState('')
+  const [savingTicket, setSavingTicket] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewContent, setPreviewContent] = useState('')
+  const [loadingPreview, setLoadingPreview] = useState(false)
+
+  useEffect(() => {
+    loadSyncStatus()
+    loadSettings()
+    loadPricing()
+    window.api.app?.getDbPath().then(setDbPath)
+  }, [])
+
+  async function loadSyncStatus() {
+    const s = await window.api.sync.status()
+    setSyncStatus(s)
+  }
+
+  async function loadSettings() {
+    const all = await window.api.settings.getAll()
+    setEstabNome(all['estabelecimento_nome'] ?? 'PlayKids')
+    setEstabUnidade(all['ticket_unidade'] ?? '')
+    setEstabTel1(all['estabelecimento_telefone1'] ?? '')
+    setEstabTel2(all['estabelecimento_telefone2'] ?? '')
+
+    const pt = (all['printer_type'] ?? 'network') as 'usb' | 'network'
+    setPrinterType(pt)
+    setPrinterIp(all['printer_ip'] ?? '192.168.1.100')
+    setPrinterPort(all['printer_port'] ?? '9100')
+    setPrinterUsbName(all['printer_usb_name'] ?? '')
+
+    setTicketExibirCodigo((all['ticket_exibir_codigo'] ?? 'true') !== 'false')
+    setTicketExibirEntrada((all['ticket_exibir_entrada'] ?? 'true') !== 'false')
+    setTicketExibirTabela((all['ticket_exibir_tabela'] ?? 'true') !== 'false')
+    setTicketRodape1(all['rodape_ticket'] ?? 'Agradecemos sua visita!')
+    setTicketRodape2(all['ticket_rodape2'] ?? '')
+
+    // Credenciais Supabase salvas prevalecem sobre env vars
+    if (all['supabase_url']) setSupabaseUrl(all['supabase_url'])
+    if (all['supabase_anon_key']) setSupabaseAnonKey(all['supabase_anon_key'])
+    if (all['supabase_key']) setSupabaseKey(all['supabase_key'])
+  }
+
+  async function loadPricing() {
+    const config = await window.api.pricing.get(ESTABELECIMENTO_ID)
+    if (config) {
+      setPrecoBase(config.valor_base)
+      setMinutosBase(config.minutos_base)
+      try {
+        setFaixas(JSON.parse(config.faixas_intermediarias || '[]'))
+      } catch {
+        setFaixas([])
+      }
+      setValorBloco(config.valor_bloco)
+      setMinutosPorBloco(config.minutos_por_bloco)
+    }
+    const count = await window.api.pricing.activeCount(ESTABELECIMENTO_ID)
+    setVisitasAtivasCount(count)
+  }
+
+  async function salvarEstabelecimento() {
+    setSavingEstab(true)
+    try {
+      await window.api.settings.set('estabelecimento_nome', estabNome.trim() || 'PlayKids')
+      await window.api.settings.set('ticket_unidade', estabUnidade.trim())
+      await window.api.settings.set('estabelecimento_telefone1', estabTel1.trim())
+      await window.api.settings.set('estabelecimento_telefone2', estabTel2.trim())
+      toast({ title: 'Dados do estabelecimento salvos!' })
+    } catch {
+      toast({ title: 'Erro ao salvar', variant: 'destructive' })
+    }
+    setSavingEstab(false)
+  }
+
+  async function salvarPreco() {
+    if (precoBase <= 0 || minutosBase <= 0 || valorBloco <= 0 || minutosPorBloco <= 0) {
+      toast({ title: 'Valores inválidos', description: 'Todos os valores devem ser maiores que zero.', variant: 'destructive' })
+      return
+    }
+    setSavingPreco(true)
+    try {
+      const sortedFaixas = [...faixas].sort((a, b) => a.ate_minutos - b.ate_minutos)
+      const franquiaMinutos = sortedFaixas.length > 0
+        ? sortedFaixas[sortedFaixas.length - 1].ate_minutos
+        : minutosBase
+      await window.api.pricing.save({
+        estabelecimentoId: ESTABELECIMENTO_ID,
+        nome: 'Padrão',
+        valor_base: precoBase,
+        minutos_base: minutosBase,
+        faixas_intermediarias: JSON.stringify(sortedFaixas),
+        franquia_minutos: franquiaMinutos,
+        valor_bloco: valorBloco,
+        minutos_por_bloco: minutosPorBloco,
+        aplicarAtivas,
+      })
+      toast({ title: 'Tabela de preços salva!' })
+      await loadPricing()
+      setAplicarAtivas(false)
+    } catch {
+      toast({ title: 'Erro ao salvar preços', variant: 'destructive' })
+    }
+    setSavingPreco(false)
+  }
+
+  async function salvarImpressora() {
+    setSavingPrinter(true)
+    try {
+      const iface = printerType === 'network'
+        ? `tcp://${printerIp.trim()}:${printerPort.trim()}`
+        : `printer:${printerUsbName}`
+      await window.api.settings.set('printer_type', printerType)
+      await window.api.settings.set('printer_ip', printerIp.trim())
+      await window.api.settings.set('printer_port', printerPort.trim())
+      await window.api.settings.set('printer_usb_name', printerUsbName)
+      await window.api.settings.set('printer_interface', iface)
+      toast({ title: 'Configurações de impressora salvas!' })
+    } catch {
+      toast({ title: 'Erro ao salvar impressora', variant: 'destructive' })
+    }
+    setSavingPrinter(false)
+  }
+
+  async function salvarTicket() {
+    setSavingTicket(true)
+    try {
+      await window.api.settings.set('ticket_exibir_codigo', ticketExibirCodigo ? 'true' : 'false')
+      await window.api.settings.set('ticket_exibir_entrada', ticketExibirEntrada ? 'true' : 'false')
+      await window.api.settings.set('ticket_exibir_tabela', ticketExibirTabela ? 'true' : 'false')
+      await window.api.settings.set('rodape_ticket', ticketRodape1.trim())
+      await window.api.settings.set('ticket_rodape2', ticketRodape2.trim())
+      toast({ title: 'Personalização do ticket salva!' })
+    } catch {
+      toast({ title: 'Erro ao salvar', variant: 'destructive' })
+    }
+    setSavingTicket(false)
+  }
+
+  async function detectarImpressorasUsb() {
+    setLoadingUsbPrinters(true)
+    try {
+      const printers = await window.api.printer.listUsb()
+      setUsbPrinters(printers)
+      if (printers.length === 0) {
+        toast({ title: 'Nenhuma impressora USB encontrada', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Erro ao detectar impressoras', variant: 'destructive' })
+    }
+    setLoadingUsbPrinters(false)
+  }
+
+  async function testarImpressora() {
+    setPrinterLoading(true)
+    const iface = printerType === 'network'
+      ? `tcp://${printerIp.trim()}:${printerPort.trim()}`
+      : `printer:${printerUsbName}`
+    const res = await window.api.printer.test(iface)
+    setPrinterOk(res.success)
+    if (!res.success) {
+      toast({ title: 'Impressora não encontrada', description: res.error, variant: 'destructive' })
+    }
+    setPrinterLoading(false)
+  }
+
+  async function visualizarPreview() {
+    setLoadingPreview(true)
+    try {
+      const res = await window.api.printer.entrada({
+        criancaNome: 'Ana Paula (preview)',
+        responsavelNome: 'Maria Santos',
+        responsavelTelefone: '(11) 99999-9999',
+        entradaEm: new Date().toISOString(),
+        ticketNumero: 1,
+        estabelecimentoId: ESTABELECIMENTO_ID,
+      })
+      setPreviewContent(res.preview)
+      setPreviewOpen(true)
+    } catch {
+      toast({ title: 'Erro ao gerar preview', variant: 'destructive' })
+    }
+    setLoadingPreview(false)
+  }
+
+  async function sincronizar() {
+    setSyncLoading(true)
+    try {
+      const res = await window.api.sync.fetchConfig(supabaseUrl, supabaseKey, ESTABELECIMENTO_ID, supabaseAnonKey || undefined)
+      if (res.success) {
+        toast({ title: 'Sincronizado!', description: `${res.count} configurações de preço importadas.` })
+        await loadSyncStatus()
+      } else {
+        toast({ title: 'Erro na sincronização', description: res.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Erro', description: 'Falha ao conectar com o Supabase.', variant: 'destructive' })
+    }
+    setSyncLoading(false)
+  }
+
+  async function enviarDados() {
+    setPushLoading(true)
+    try {
+      const res: SyncPushResult = await window.api.sync.pushData(supabaseUrl, supabaseKey, supabaseAnonKey || undefined)
+      if (res.errors.length > 0) {
+        toast({ title: 'Erro no sync', description: res.errors[0], variant: 'destructive' })
+      } else {
+        const totalEnviado = Object.values(res.pushed).reduce((a, b) => a + b, 0)
+        toast({ title: 'Dados enviados!', description: `${totalEnviado} registro(s) sincronizado(s) com o Supabase.` })
+      }
+      await loadSyncStatus()
+    } catch {
+      toast({ title: 'Falha ao conectar com o Supabase.', variant: 'destructive' })
+    }
+    setPushLoading(false)
+  }
+
+  async function forcarSyncCompleto() {
+    setForceLoading(true)
+    try {
+      await window.api.sync.resetAll()
+      const res: SyncPushResult = await window.api.sync.pushData(supabaseUrl, supabaseKey, supabaseAnonKey || undefined)
+      if (res.errors.length > 0) {
+        toast({ title: 'Erro no sync', description: res.errors[0], variant: 'destructive' })
+      } else {
+        const totalEnviado = Object.values(res.pushed).reduce((a, b) => a + b, 0)
+        toast({ title: 'Sync completo!', description: `${totalEnviado} registro(s) reenviado(s) ao Supabase.` })
+      }
+      await loadSyncStatus()
+    } catch {
+      toast({ title: 'Falha ao conectar com o Supabase.', variant: 'destructive' })
+    }
+    setForceLoading(false)
+  }
+
+  async function abrirPastaDados() {
+    await window.api.app.openDataFolder()
+  }
+
+  function confirmarReset() {
+    if (senhaResetInput !== 'settecnologia') {
+      setSenhaResetErro(true)
+      setSenhaResetInput('')
+      return
+    }
+    setSenhaResetErro(false)
+    setResettingApp(true)
+    window.api.app.resetInstallation()
+  }
+
+  async function salvarSupabase() {
+    setSavingSupabase(true)
+    await window.api.settings.set('supabase_url', supabaseUrl)
+    await window.api.settings.set('supabase_anon_key', supabaseAnonKey)
+    await window.api.settings.set('supabase_key', supabaseKey)
+    toast({ title: 'Credenciais salvas!' })
+    setSavingSupabase(false)
+  }
+
+  function updateFaixa(i: number, field: keyof FaixaIntermediaria, value: number) {
+    setFaixas(f => f.map((faixa, idx) => idx === i ? { ...faixa, [field]: value } : faixa))
+  }
+
+  function removeFaixa(i: number) {
+    setFaixas(f => f.filter((_, idx) => idx !== i))
+  }
+
+  function addFaixa() {
+    const lastMax = faixas.length > 0 ? Math.max(...faixas.map(f => f.ate_minutos)) : minutosBase
+    setFaixas(f => [...f, { ate_minutos: lastMax + 15, valor: 0 }])
+  }
+
+  const totalPendente = syncStatus
+    ? Object.values(syncStatus.pendentes).reduce((a, b) => a + b, 0)
+    : 0
+
+  return (
+    <div className="p-6 max-w-2xl mx-auto space-y-6 pb-12">
+      <h1 className="text-2xl font-bold">Configurações</h1>
+
+      {/* 1 — Dados do Estabelecimento */}
+      <Card>
+        <CardHeader
+          className="cursor-pointer select-none flex flex-row items-center justify-between"
+          onClick={() => toggleSecao('estab')}
+        >
+          <div>
+            <CardTitle className="text-base">Dados do Estabelecimento</CardTitle>
+            <CardDescription>Informações exibidas no cabeçalho dos tickets</CardDescription>
+          </div>
+          <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.estab ? 'rotate-180' : '')} />
+        </CardHeader>
+        {secoesAbertas.estab && <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Nome da empresa</Label>
+            <Input value={estabNome} onChange={(e) => setEstabNome(e.target.value)} placeholder="Play Kids Lazer Infantil" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Nome do local / unidade</Label>
+            <Input value={estabUnidade} onChange={(e) => setEstabUnidade(e.target.value)} placeholder="Master Sonda Shopping" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Telefone 1</Label>
+              <Input value={estabTel1} onChange={(e) => setEstabTel1(e.target.value)} placeholder="(00) 9999-9999" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Telefone 2</Label>
+              <Input value={estabTel2} onChange={(e) => setEstabTel2(e.target.value)} placeholder="(00) 9999-9999" />
+            </div>
+          </div>
+          <Button onClick={salvarEstabelecimento} disabled={savingEstab}>
+            <Save className="w-4 h-4 mr-2" />
+            {savingEstab ? 'Salvando...' : 'Salvar dados'}
+          </Button>
+        </CardContent>}
+      </Card>
+
+      {/* 2 — Tabela de Preços */}
+      <Card>
+        <CardHeader
+          className="cursor-pointer select-none flex flex-row items-center justify-between"
+          onClick={() => toggleSecao('precos')}
+        >
+          <div>
+            <CardTitle className="text-base">Tabela de Preços</CardTitle>
+            <CardDescription>Define o valor cobrado por tempo de permanência no playground</CardDescription>
+          </div>
+          <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.precos ? 'rotate-180' : '')} />
+        </CardHeader>
+        {secoesAbertas.precos && <CardContent className="space-y-5">
+          {/* Base */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Valor base (R$)</Label>
+              <Input
+                type="number" min="0" step="0.01"
+                value={precoBase}
+                onChange={(e) => setPrecoBase(parseFloat(e.target.value) || 0)}
+              />
+              <p className="text-xs text-muted-foreground">Valor cobrado na franquia inicial</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Franquia inicial (min)</Label>
+              <Input
+                type="number" min="1"
+                value={minutosBase}
+                onChange={(e) => setMinutosBase(parseInt(e.target.value) || 0)}
+              />
+              <p className="text-xs text-muted-foreground">Tempo incluso no valor base</p>
+            </div>
+          </div>
+
+          {/* Faixas intermediárias */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Faixas intermediárias</Label>
+              <Button variant="outline" size="sm" onClick={addFaixa}>
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Adicionar faixa
+              </Button>
+            </div>
+            {faixas.length === 0 && (
+              <p className="text-xs text-muted-foreground py-2">Nenhuma faixa. Após o valor base, já serão cobrados blocos extras.</p>
+            )}
+            <div className="space-y-2">
+              {faixas.map((faixa, i) => (
+                <div key={i} className="flex items-center gap-2 p-2 bg-muted/40 rounded-md">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">Até</span>
+                  <Input
+                    type="number" min="1"
+                    value={faixa.ate_minutos}
+                    onChange={(e) => updateFaixa(i, 'ate_minutos', parseInt(e.target.value) || 0)}
+                    className="w-20 h-8 text-sm"
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">min →</span>
+                  <span className="text-xs text-muted-foreground">R$</span>
+                  <Input
+                    type="number" min="0" step="0.01"
+                    value={faixa.valor}
+                    onChange={(e) => updateFaixa(i, 'valor', parseFloat(e.target.value) || 0)}
+                    className="w-24 h-8 text-sm"
+                  />
+                  <Button
+                    variant="ghost" size="sm"
+                    onClick={() => removeFaixa(i)}
+                    className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Blocos extras */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Valor por bloco (R$)</Label>
+              <Input
+                type="number" min="0" step="0.01"
+                value={valorBloco}
+                onChange={(e) => setValorBloco(parseFloat(e.target.value) || 0)}
+              />
+              <p className="text-xs text-muted-foreground">Acréscimo após todas as faixas</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Minutos por bloco</Label>
+              <Input
+                type="number" min="1"
+                value={minutosPorBloco}
+                onChange={(e) => setMinutosPorBloco(parseInt(e.target.value) || 0)}
+              />
+              <p className="text-xs text-muted-foreground">Intervalo de cobrança extra</p>
+            </div>
+          </div>
+
+          {/* Aplicar às visitas em andamento */}
+          <div className="border rounded-md p-3 space-y-2">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={aplicarAtivas}
+                onChange={(e) => setAplicarAtivas(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-violet-600"
+              />
+              <div>
+                <p className="text-sm font-medium">Aplicar novos valores às visitas em andamento</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Quando desmarcado, visitas já em andamento continuam com a tabela anterior até a saída.
+                  Apenas novas entradas usarão a nova tabela.
+                </p>
+              </div>
+            </label>
+            {aplicarAtivas && visitasAtivasCount > 0 && (
+              <div className="flex items-center gap-2 text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <p className="text-xs font-medium">
+                  {visitasAtivasCount} criança{visitasAtivasCount !== 1 ? 's' : ''} no playground {visitasAtivasCount !== 1 ? 'serão afetadas' : 'será afetada'} imediatamente.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <Button onClick={salvarPreco} disabled={savingPreco}>
+            <Save className="w-4 h-4 mr-2" />
+            {savingPreco ? 'Salvando...' : 'Salvar tabela de preços'}
+          </Button>
+        </CardContent>}
+      </Card>
+
+      {/* 3 — Impressora Térmica */}
+      <Card>
+        <CardHeader
+          className="cursor-pointer select-none flex flex-row items-center justify-between"
+          onClick={() => toggleSecao('impressora')}
+        >
+          <div>
+            <CardTitle className="text-base">Impressora Térmica</CardTitle>
+            <CardDescription>Configure a conexão com a impressora de tickets</CardDescription>
+          </div>
+          <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.impressora ? 'rotate-180' : '')} />
+        </CardHeader>
+        {secoesAbertas.impressora && <CardContent className="space-y-4">
+          {/* Seletor USB / Rede */}
+          <div className="flex gap-2">
+            <Button
+              variant={printerType === 'network' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => { setPrinterType('network'); setPrinterOk(null) }}
+              className="gap-1.5"
+            >
+              <Wifi className="w-3.5 h-3.5" />
+              Rede (TCP/IP)
+            </Button>
+            <Button
+              variant={printerType === 'usb' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => { setPrinterType('usb'); setPrinterOk(null) }}
+              className="gap-1.5"
+            >
+              <Usb className="w-3.5 h-3.5" />
+              USB
+            </Button>
+          </div>
+
+          {/* Rede */}
+          {printerType === 'network' && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2 space-y-1.5">
+                <Label>IP da impressora</Label>
+                <Input
+                  value={printerIp}
+                  onChange={(e) => { setPrinterIp(e.target.value); setPrinterOk(null) }}
+                  placeholder="192.168.1.100"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Porta</Label>
+                <Input
+                  value={printerPort}
+                  onChange={(e) => { setPrinterPort(e.target.value); setPrinterOk(null) }}
+                  placeholder="9100"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* USB */}
+          {printerType === 'usb' && (
+            <div className="space-y-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={detectarImpressorasUsb}
+                disabled={loadingUsbPrinters}
+              >
+                <Printer className="w-3.5 h-3.5 mr-2" />
+                {loadingUsbPrinters ? 'Detectando...' : 'Detectar impressoras USB'}
+              </Button>
+              {usbPrinters.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>Impressora detectada</Label>
+                  <Select
+                    value={printerUsbName}
+                    onValueChange={(v) => { setPrinterUsbName(v); setPrinterOk(null) }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione uma impressora..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {usbPrinters.map(name => (
+                        <SelectItem key={name} value={name}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {usbPrinters.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Clique em "Detectar impressoras USB" para listar as impressoras disponíveis.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Ações */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button variant="outline" onClick={testarImpressora} disabled={printerLoading || (printerType === 'usb' && !printerUsbName)}>
+              <Printer className="w-4 h-4 mr-2" />
+              {printerLoading ? 'Testando...' : 'Testar conexão'}
+            </Button>
+            <Button onClick={salvarImpressora} disabled={savingPrinter}>
+              <Save className="w-4 h-4 mr-2" />
+              {savingPrinter ? 'Salvando...' : 'Salvar'}
+            </Button>
+            {printerOk === true && (
+              <Badge variant="outline" className="flex items-center gap-1 border-green-500 text-green-700">
+                <CheckCircle className="w-3 h-3" /> Conectada
+              </Badge>
+            )}
+            {printerOk === false && (
+              <Badge variant="destructive" className="flex items-center gap-1">
+                <XCircle className="w-3 h-3" /> Sem conexão
+              </Badge>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t">
+            <div>
+              <p className="text-sm font-medium">Modo simulação de impressão</p>
+              <p className="text-xs text-muted-foreground">
+                Mostra preview do ticket ao invés de imprimir
+              </p>
+            </div>
+            <Toggle checked={simulacaoImpressao} onChange={setSimulacaoImpressao} />
+          </div>
+        </CardContent>}
+      </Card>
+
+      {/* 4 — Personalização do Ticket */}
+      <Card>
+        <CardHeader
+          className="cursor-pointer select-none flex flex-row items-center justify-between"
+          onClick={() => toggleSecao('ticket')}
+        >
+          <div>
+            <CardTitle className="text-base">Personalização do Ticket</CardTitle>
+            <CardDescription>Defina o que aparece em cada seção do ticket impresso</CardDescription>
+          </div>
+          <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.ticket ? 'rotate-180' : '')} />
+        </CardHeader>
+        {secoesAbertas.ticket && <CardContent className="space-y-5">
+          {/* Cabeçalho (referência) */}
+          <div className="bg-muted/40 rounded-md px-3 py-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Cabeçalho</p>
+            <p className="text-xs text-muted-foreground">
+              Nome da empresa, local/unidade e telefones são configurados em <strong>Dados do Estabelecimento</strong> acima.
+            </p>
+          </div>
+
+          {/* Corpo — toggles */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Corpo</p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm">Exibir código do ticket</p>
+                  <p className="text-xs text-muted-foreground">Ex: #001</p>
+                </div>
+                <Toggle checked={ticketExibirCodigo} onChange={setTicketExibirCodigo} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm">Exibir data e hora de entrada</p>
+                  <p className="text-xs text-muted-foreground">Ex: 25/04/2026  14:30</p>
+                </div>
+                <Toggle checked={ticketExibirEntrada} onChange={setTicketExibirEntrada} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm">Exibir tabela de valores no ticket de entrada</p>
+                  <p className="text-xs text-muted-foreground">Imprime a tabela de preços no ticket de entrada da criança</p>
+                </div>
+                <Toggle checked={ticketExibirTabela} onChange={setTicketExibirTabela} />
+              </div>
+            </div>
+          </div>
+
+          {/* Rodapé personalizável */}
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rodapé personalizável</p>
+            <div className="space-y-1.5">
+              <Label>Mensagem personalizada — linha 1</Label>
+              <Input
+                value={ticketRodape1}
+                onChange={(e) => setTicketRodape1(e.target.value)}
+                placeholder="Agradecemos sua visita!"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Mensagem personalizada — linha 2</Label>
+              <Input
+                value={ticketRodape2}
+                onChange={(e) => setTicketRodape2(e.target.value)}
+                placeholder="Locação para Festas de Aniversário"
+              />
+            </div>
+          </div>
+
+
+          {/* Ações */}
+          <div className="flex items-center gap-3">
+            <Button onClick={salvarTicket} disabled={savingTicket}>
+              <Save className="w-4 h-4 mr-2" />
+              {savingTicket ? 'Salvando...' : 'Salvar'}
+            </Button>
+            <Button variant="outline" onClick={visualizarPreview} disabled={loadingPreview}>
+              <Eye className="w-4 h-4 mr-2" />
+              {loadingPreview ? 'Gerando...' : 'Visualizar preview do ticket'}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            O preview reflete as configurações já salvas. Salve antes de visualizar para ver as alterações.
+          </p>
+        </CardContent>}
+      </Card>
+
+      {/* 5 — Supabase (técnico) */}
+      {tecnicoAutenticado && <Card>
+        <CardHeader
+          className="cursor-pointer select-none flex flex-row items-center justify-between"
+          onClick={() => toggleSecao('supabase')}
+        >
+          <div>
+            <CardTitle className="text-base">Supabase / Sincronização</CardTitle>
+            <CardDescription>Configure a conexão com o banco em nuvem</CardDescription>
+          </div>
+          <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.supabase ? 'rotate-180' : '')} />
+        </CardHeader>
+        {secoesAbertas.supabase && <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>URL do projeto</Label>
+            <Input value={supabaseUrl} onChange={(e) => setSupabaseUrl(e.target.value)} placeholder="https://xxx.supabase.co" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Anon Key do projeto</Label>
+            <Input value={supabaseAnonKey} onChange={(e) => setSupabaseAnonKey(e.target.value)} placeholder="eyJhbGci... (chave anon do projeto)" type="password" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Token JWT do cliente</Label>
+            <Input value={supabaseKey} onChange={(e) => setSupabaseKey(e.target.value)} placeholder="eyJhbGci... (token gerado por generate-token)" type="password" />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={salvarSupabase}
+            disabled={savingSupabase || !supabaseUrl || !supabaseAnonKey}
+          >
+            <Save className="w-3.5 h-3.5 mr-2" />
+            {savingSupabase ? 'Salvando...' : 'Salvar credenciais'}
+          </Button>
+          <div className="space-y-3 pt-2">
+            {/* Status de pendentes */}
+            <div className="text-sm">
+              {totalPendente > 0 ? (
+                <div className="space-y-1">
+                  <span className="text-yellow-600 font-medium">{totalPendente} registro(s) pendente(s) de sync</span>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    {syncStatus && (
+                      <>
+                        {syncStatus.pendentes.visitas > 0 && <span>Visitas: {syncStatus.pendentes.visitas}</span>}
+                        {syncStatus.pendentes.criancas > 0 && <span>Crianças: {syncStatus.pendentes.criancas}</span>}
+                        {syncStatus.pendentes.responsaveis > 0 && <span>Responsáveis: {syncStatus.pendentes.responsaveis}</span>}
+                        {syncStatus.pendentes.logs > 0 && <span>Logs: {syncStatus.pendentes.logs}</span>}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <span className="text-green-600">Tudo sincronizado</span>
+              )}
+            </div>
+
+            {/* Avançado */}
+            <div className="border rounded-md overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setAvancadoAberto((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40 transition-colors"
+              >
+                <span>Avançado</span>
+                <span className="text-xs">{avancadoAberto ? '▲' : '▼'}</span>
+              </button>
+              {avancadoAberto && (
+                <div className="px-3 pb-3 pt-1 flex flex-wrap gap-2 border-t">
+                  <Button
+                    onClick={enviarDados}
+                    disabled={pushLoading || !supabaseUrl || !supabaseAnonKey || !supabaseKey || totalPendente === 0}
+                  >
+                    <Upload className={`w-4 h-4 mr-2 ${pushLoading ? 'animate-pulse' : ''}`} />
+                    {pushLoading ? 'Enviando...' : 'Enviar dados locais'}
+                  </Button>
+                  <Button variant="outline" onClick={sincronizar} disabled={syncLoading || !supabaseUrl || !supabaseAnonKey}>
+                    <RefreshCw className={`w-4 h-4 mr-2 ${syncLoading ? 'animate-spin' : ''}`} />
+                    Importar preços
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={forcarSyncCompleto}
+                    disabled={forceLoading || !supabaseUrl || !supabaseAnonKey || !supabaseKey}
+                    className="text-orange-600 border-orange-400 hover:bg-orange-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${forceLoading ? 'animate-spin' : ''}`} />
+                    {forceLoading ? 'Forçando...' : 'Forçar sync completo'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>}
+      </Card>}
+
+      {/* 6 — Ferramentas técnicas */}
+      {tecnicoAutenticado && (
+        <Card>
+          <CardHeader
+            className="cursor-pointer select-none flex flex-row items-center justify-between"
+            onClick={() => toggleSecao('ferramentas')}
+          >
+            <div>
+              <CardTitle className="text-base">Ferramentas</CardTitle>
+              <CardDescription>Utilitários para suporte e reinstalação</CardDescription>
+            </div>
+            <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.ferramentas ? 'rotate-180' : '')} />
+          </CardHeader>
+          {secoesAbertas.ferramentas && (
+            <CardContent className="space-y-4">
+              {dbPath && (
+                <div className="bg-muted/40 rounded-md px-3 py-2 text-xs font-mono text-muted-foreground break-all">
+                  {dbPath}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={abrirPastaDados}>
+                  <FolderOpen className="w-4 h-4 mr-2" />
+                  Abrir pasta de dados
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => { setSenhaResetInput(''); setSenhaResetErro(false); setModalResetAberto(true) }}
+                  className="text-red-600 border-red-400 hover:bg-red-50"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Resetar instalação
+                </Button>
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      )}
+
+      {/* 7 — Sobre */}
+      <Card>
+        <CardHeader
+          className="cursor-pointer select-none flex flex-row items-center justify-between"
+          onClick={() => toggleSecao('sobre')}
+        >
+          <div>
+            <CardTitle className="text-base">Sobre</CardTitle>
+          </div>
+          <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.sobre ? 'rotate-180' : '')} />
+        </CardHeader>
+        {secoesAbertas.sobre && <CardContent className="text-sm text-muted-foreground space-y-1">
+          <p>ERP Set Tecnologia v1.0.0</p>
+          <p>Estabelecimento ID: <code className="text-xs bg-muted px-1 py-0.5 rounded">{ESTABELECIMENTO_ID}</code></p>
+        </CardContent>}
+      </Card>
+
+      {/* Acesso técnico — discreto, sem indicação visual */}
+      {!tecnicoAutenticado && (
+        <p
+          className="text-xs text-center cursor-default select-none pb-2"
+          style={{ color: 'transparent', textShadow: '0 0 0 rgba(0,0,0,0.08)' }}
+          onClick={() => setModalSenhaAberto(true)}
+        >
+          Acesso técnico
+        </p>
+      )}
+
+      <Dialog
+        open={modalSenhaAberto}
+        onOpenChange={(v) => { setModalSenhaAberto(v); setSenhaInput(''); setSenhaErro(false) }}
+      >
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Autenticação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <Input
+              type="password"
+              placeholder="Senha"
+              value={senhaInput}
+              autoFocus
+              className={senhaErro ? 'border-red-400' : ''}
+              onChange={(e) => { setSenhaInput(e.target.value); setSenhaErro(false) }}
+              onKeyDown={(e) => e.key === 'Enter' && autenticarTecnico()}
+            />
+            {senhaErro && <p className="text-xs text-red-500">Senha incorreta</p>}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => { setModalSenhaAberto(false); setSenhaInput(''); setSenhaErro(false) }}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={autenticarTecnico} disabled={!senhaInput}>
+                Acessar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={modalResetAberto}
+        onOpenChange={(v) => { setModalResetAberto(v); setSenhaResetInput(''); setSenhaResetErro(false) }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Resetar instalação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-md px-3 py-2 text-xs text-red-700">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Esta ação apaga o banco de dados local e todas as configurações.
+                O app será reiniciado na tela de ativação. <strong>Esta ação não pode ser desfeita.</strong>
+              </span>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Confirme com a senha técnica:</p>
+              <Input
+                type="password"
+                placeholder="Senha técnica"
+                value={senhaResetInput}
+                autoFocus
+                className={senhaResetErro ? 'border-red-400' : ''}
+                onChange={(e) => { setSenhaResetInput(e.target.value); setSenhaResetErro(false) }}
+                onKeyDown={(e) => e.key === 'Enter' && confirmarReset()}
+              />
+              {senhaResetErro && <p className="text-xs text-red-500">Senha incorreta</p>}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setModalResetAberto(false)}>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={confirmarReset}
+                disabled={!senhaResetInput || resettingApp}
+              >
+                {resettingApp ? 'Resetando...' : 'Confirmar reset'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <PrintPreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        content={previewContent}
+        title="Preview do Ticket de Entrada"
+      />
+    </div>
+  )
+}
