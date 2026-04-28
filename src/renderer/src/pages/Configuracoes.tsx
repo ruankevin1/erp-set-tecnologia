@@ -82,7 +82,7 @@ export function Configuracoes() {
 }
 
 function ConfiguracoesContent() {
-  const { syncStatus, setSyncStatus, simulacaoImpressao, setSimulacaoImpressao } = useStore()
+  const { syncStatus, setSyncStatus, simulacaoImpressao, setSimulacaoImpressao, setNomeEstabelecimento } = useStore()
   const [secoesAbertas, setSecoesAbertas] = useState({
     estab: false, precos: false, impressora: false, ticket: false, supabase: false, sobre: false, ferramentas: false
   })
@@ -221,10 +221,12 @@ function ConfiguracoesContent() {
   async function salvarEstabelecimento() {
     setSavingEstab(true)
     try {
-      await window.api.settings.set('estabelecimento_nome', estabNome.trim() || 'PlayKids')
+      const nome = estabNome.trim() || 'PlayKids'
+      await window.api.settings.set('estabelecimento_nome', nome)
       await window.api.settings.set('ticket_unidade', estabUnidade.trim())
       await window.api.settings.set('estabelecimento_telefone1', estabTel1.trim())
       await window.api.settings.set('estabelecimento_telefone2', estabTel2.trim())
+      setNomeEstabelecimento(nome)
       toast({ title: 'Dados do estabelecimento salvos!' })
     } catch {
       toast({ title: 'Erro ao salvar', variant: 'destructive' })

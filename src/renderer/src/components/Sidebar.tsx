@@ -53,10 +53,7 @@ export function Sidebar() {
     <aside className="w-56 bg-slate-900 text-slate-100 flex flex-col h-screen shrink-0">
       {/* Logo */}
       <div className="px-4 py-5 border-b border-slate-700">
-        <div className="flex items-center gap-2">
-          <img src={setIcon} alt="Set Tecnologia" className="w-8 h-8 rounded-full object-cover shrink-0" />
-          <p className="font-bold text-sm leading-tight">{nomeEstabelecimento}</p>
-        </div>
+        <p className="font-bold text-sm leading-tight">{nomeEstabelecimento}</p>
       </div>
 
       {/* Nav */}
@@ -103,8 +100,9 @@ export function Sidebar() {
       </div>
 
       {/* Rodapé fixo */}
-      <div className="px-4 py-2 border-t border-slate-800">
-        <p className="text-[10px] text-slate-600 text-center">Desenvolvido por Set Tecnologia</p>
+      <div className="px-4 py-3 border-t border-slate-800 flex flex-col items-center gap-1">
+        <img src={setIcon} alt="Set Tecnologia" className="w-7 h-7 rounded-full object-cover opacity-60" />
+        <p className="text-[10px] text-slate-500">Desenvolvido por Set Tecnologia</p>
       </div>
     </aside>
   )
