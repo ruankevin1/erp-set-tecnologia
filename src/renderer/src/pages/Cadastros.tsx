@@ -64,7 +64,7 @@ export function Cadastros() {
   const [presencaFilter, setPresencaFilter] = useState<PresencaFilter>('todos')
   const [atividadeFilter, setAtividadeFilter] = useState<AtividadeFilter>('todos')
   const [children, setChildren] = useState<ChildWithStats[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [sortBy, setSortBy] = useState<SortKey>('nome')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
