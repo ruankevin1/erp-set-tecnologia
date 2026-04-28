@@ -58,12 +58,13 @@
   "build": {
     "appId": "com.settecnologia.erp",
     "productName": "ERP Set Tecnologia",
+    "icon": "assets/icon.png",
     "directories": {
       "output": "dist"
     },
     "win": {
       "target": "nsis",
-      "icon": "resources/icon.ico"
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,
