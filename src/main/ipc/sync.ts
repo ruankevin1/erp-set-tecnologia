@@ -1,5 +1,6 @@
 import { IpcMain } from 'electron'
 import Database from 'better-sqlite3'
+import bcrypt from 'bcryptjs'
 import { triggerSync, pushToSupabase, getPendentes } from '../sync-service'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../constants'
 
@@ -25,11 +26,161 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
   })
 
   ipcMain.handle('sync:reset-all', () => {
-    const tables = ['estabelecimentos', 'responsaveis', 'criancas', 'visitas', 'visita_faixas_aplicadas', 'fechamentos_caixa', 'logs_auditoria']
+    const tables = ['estabelecimentos', 'operadores', 'responsaveis', 'criancas', 'visitas', 'visita_faixas_aplicadas', 'fechamentos_caixa', 'logs_auditoria']
     db.transaction(() => {
       for (const t of tables) db.exec(`UPDATE ${t} SET sincronizado = 0`)
     })()
     return { success: true }
+  })
+
+  ipcMain.handle('sync:pull-all', async (_event, { estabelecimentoId }: { estabelecimentoId: string }) => {
+    const key = getSettingValue(db, 'supabase_key')
+    if (!key) return { success: false, error: 'Chave de acesso não configurada' }
+
+    async function fetchAll(table: string, filter: string): Promise<any[]> {
+      const all: any[] = []
+      const PAGE = 1000
+      let from = 0
+      while (true) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${key}`,
+            'Content-Type': 'application/json',
+            'Range-Unit': 'items',
+            Range: `${from}-${from + PAGE - 1}`,
+            Prefer: 'count=none',
+          },
+        })
+        if (!res.ok) throw new Error(`[${table}] HTTP ${res.status}: ${await res.text()}`)
+        const rows = await res.json()
+        all.push(...rows)
+        if (rows.length < PAGE) break
+        from += PAGE
+      }
+      return all
+    }
+
+    try {
+      const f = `estabelecimento_id=eq.${estabelecimentoId}`
+
+      const [estabelecimentos, configuracoes, operadores, responsaveis, criancas, visitas, fechamentos] =
+        await Promise.all([
+          fetchAll('estabelecimentos', `id=eq.${estabelecimentoId}`),
+          fetchAll('configuracoes_preco', f),
+          fetchAll('operadores', f),
+          fetchAll('responsaveis', f),
+          fetchAll('criancas', f),
+          fetchAll('visitas', f),
+          fetchAll('fechamentos_caixa', f),
+        ])
+
+      // busca faixas em chunks para não estourar URL
+      let faixas: any[] = []
+      const visitaIds = visitas.map((v) => v.id)
+      const CHUNK = 100
+      for (let i = 0; i < visitaIds.length; i += CHUNK) {
+        const ids = visitaIds.slice(i, i + CHUNK).join(',')
+        const rows = await fetchAll('visita_faixas_aplicadas', `visita_id=in.(${ids})`)
+        faixas.push(...rows)
+      }
+
+      const defaultHash = bcrypt.hashSync('trocar123', 10)
+
+      db.pragma('foreign_keys = OFF')
+      try {
+        db.transaction(() => {
+          const stmtEstab = db.prepare(`INSERT OR REPLACE INTO estabelecimentos
+            (id, nome, cnpj, endereco, telefone, ativo, configuracoes, sincronizado, criado_em, atualizado_em)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+          for (const r of estabelecimentos) {
+            stmtEstab.run(r.id, r.nome, r.cnpj ?? null, r.endereco ?? null, r.telefone ?? null, r.ativo ?? 1, r.configuracoes ?? null, r.criado_em, r.atualizado_em)
+            if (r.configuracoes) {
+              try {
+                const settings = JSON.parse(r.configuracoes)
+                const stmtSetting = db.prepare('INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES (?, ?)')
+                for (const [chave, valor] of Object.entries(settings)) {
+                  if (typeof valor === 'string') stmtSetting.run(chave, valor)
+                }
+              } catch { /* ignora JSON inválido */ }
+            }
+          }
+
+          const stmtOper = db.prepare(`INSERT OR IGNORE INTO operadores
+            (id, estabelecimento_id, nome, login, senha_hash, nivel_acesso, master, ativo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+          for (const r of operadores)
+            stmtOper.run(r.id, r.estabelecimento_id, r.nome, r.login, defaultHash, r.nivel_acesso ?? 'operador', r.master ?? 0, r.ativo ?? 1)
+
+          const stmtConf = db.prepare(`INSERT OR REPLACE INTO configuracoes_preco
+            (id, estabelecimento_id, nome, idade_min, idade_max, valor_base, minutos_base,
+             faixas_intermediarias, franquia_minutos, valor_bloco, minutos_por_bloco, ativo, sincronizado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`)
+          for (const r of configuracoes)
+            stmtConf.run(r.id, r.estabelecimento_id, r.nome, r.idade_min ?? null, r.idade_max ?? null,
+              r.valor_base, r.minutos_base, r.faixas_intermediarias ?? '[]',
+              r.franquia_minutos, r.valor_bloco, r.minutos_por_bloco, r.ativo ?? 1)
+
+          const stmtResp = db.prepare(`INSERT OR REPLACE INTO responsaveis
+            (id, estabelecimento_id, nome, cpf, telefone, email, observacoes, sincronizado, criado_em, atualizado_em)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+          for (const r of responsaveis)
+            stmtResp.run(r.id, r.estabelecimento_id, r.nome, r.cpf ?? null, r.telefone ?? null,
+              r.email ?? null, r.observacoes ?? null, r.criado_em, r.atualizado_em)
+
+          const stmtCrianca = db.prepare(`INSERT OR REPLACE INTO criancas
+            (id, estabelecimento_id, responsavel_id, nome, data_nascimento, observacoes, cpf, sincronizado, criado_em, atualizado_em)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+          for (const r of criancas)
+            stmtCrianca.run(r.id, r.estabelecimento_id, r.responsavel_id ?? null, r.nome,
+              r.data_nascimento ?? null, r.observacoes ?? null, r.cpf ?? null, r.criado_em, r.atualizado_em)
+
+          const stmtVisita = db.prepare(`INSERT OR REPLACE INTO visitas
+            (id, estabelecimento_id, crianca_id, responsavel_id, operador_id, entrada_em, saida_em,
+             valor_total, status, observacoes, sincronizado, ticket_numero, forma_pagamento,
+             valor_original, desconto_tipo, desconto_valor, motivo_desconto)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`)
+          for (const r of visitas)
+            stmtVisita.run(r.id, r.estabelecimento_id, r.crianca_id, r.responsavel_id ?? null,
+              r.operador_id ?? null, r.entrada_em, r.saida_em ?? null, r.valor_total ?? null,
+              r.status, r.observacoes ?? null, r.ticket_numero ?? null, r.forma_pagamento ?? null,
+              r.valor_original ?? null, r.desconto_tipo ?? null, r.desconto_valor ?? null, r.motivo_desconto ?? null)
+
+          const stmtFaixa = db.prepare(`INSERT OR REPLACE INTO visita_faixas_aplicadas
+            (id, visita_id, configuracao_preco_id, minutos, valor, sincronizado)
+            VALUES (?, ?, ?, ?, ?, 1)`)
+          for (const r of faixas)
+            stmtFaixa.run(r.id, r.visita_id, r.configuracao_preco_id, r.minutos, r.valor)
+
+          const stmtFech = db.prepare(`INSERT OR REPLACE INTO fechamentos_caixa
+            (id, estabelecimento_id, operador_id, abertura_em, fechamento_em, total_entradas,
+             total_valor, status, observacoes, sincronizado, suprimento_inicial, operador_nome)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+          for (const r of fechamentos)
+            stmtFech.run(r.id, r.estabelecimento_id, r.operador_id ?? null, r.abertura_em,
+              r.fechamento_em ?? null, r.total_entradas ?? 0, r.total_valor ?? 0,
+              r.status, r.observacoes ?? null, r.suprimento_inicial ?? 0, r.operador_nome ?? null)
+        })()
+      } finally {
+        db.pragma('foreign_keys = ON')
+      }
+
+      return {
+        success: true,
+        restored: {
+          operadores: operadores.length,
+          responsaveis: responsaveis.length,
+          criancas: criancas.length,
+          visitas: visitas.length,
+          faixas: faixas.length,
+          fechamentos: fechamentos.length,
+          configuracoes: estabelecimentos[0]?.configuracoes ? Object.keys(JSON.parse(estabelecimentos[0].configuracoes)).length : 0,
+        },
+      }
+    } catch (err: any) {
+      console.error('[sync:pull-all]', err)
+      return { success: false, error: err.message }
+    }
   })
 
   ipcMain.handle('sync:fetch-config', async (_event, { supabaseKey, estabelecimentoId }: {

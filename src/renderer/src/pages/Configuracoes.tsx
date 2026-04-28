@@ -53,6 +53,7 @@ export function Configuracoes() {
 
 function ConfiguracoesContent() {
   const { syncStatus, setSyncStatus, simulacaoImpressao, setSimulacaoImpressao, setNomeEstabelecimento } = useStore()
+  const { usuario } = useAuthStore()
   const [secoesAbertas, setSecoesAbertas] = useState({
     usuarios: false, estab: false, precos: false, impressora: false, ticket: false, supabase: false, sobre: false, ferramentas: false
   })
@@ -76,6 +77,8 @@ function ConfiguracoesContent() {
   const [loadingUsuarios, setLoadingUsuarios] = useState(false)
   const [modalUsuario, setModalUsuario] = useState<{ open: boolean; editando: UsuarioItem | null }>({ open: false, editando: null })
   const [modalSenhaUser, setModalSenhaUser] = useState<{ open: boolean; user: UsuarioItem | null }>({ open: false, user: null })
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<UsuarioItem | null>(null)
+  const [deletingUser, setDeletingUser] = useState(false)
   const [userForm, setUserForm] = useState({ nome: '', login: '', senha: '', confirmar: '', perfil: 'operador' as 'admin' | 'operador' })
   const [userFormErro, setUserFormErro] = useState('')
   const [savingUser, setSavingUser] = useState(false)
@@ -100,6 +103,9 @@ function ConfiguracoesContent() {
   const [syncLoading, setSyncLoading] = useState(false)
   const [pushLoading, setPushLoading] = useState(false)
   const [forceLoading, setForceLoading] = useState(false)
+  const [pullLoading, setPullLoading] = useState(false)
+  const [pullResult, setPullResult] = useState<{ operadores: number; responsaveis: number; criancas: number; visitas: number; faixas: number; fechamentos: number; configuracoes: number } | null>(null)
+  const [modalRestaurarAberto, setModalRestaurarAberto] = useState(false)
   const [savingSupabase, setSavingSupabase] = useState(false)
 
   // Dados do estabelecimento
@@ -210,6 +216,19 @@ function ConfiguracoesContent() {
       return
     }
     await loadUsuarios()
+  }
+
+  async function excluirUsuario(u: UsuarioItem) {
+    setDeletingUser(true)
+    const res = await window.api.users.delete(u.id)
+    setDeletingUser(false)
+    setConfirmDeleteUser(null)
+    if (!res.ok) {
+      toast({ title: 'Erro ao excluir', description: (res as any).erro, variant: 'destructive' })
+      return
+    }
+    await loadUsuarios()
+    toast({ title: 'Usuário excluído' })
   }
 
   async function loadSyncStatus() {
@@ -415,6 +434,25 @@ function ConfiguracoesContent() {
     setPushLoading(false)
   }
 
+  async function restaurarDaNuvem() {
+    setPullLoading(true)
+    setPullResult(null)
+    try {
+      const res = await window.api.sync.pullAll(ESTABELECIMENTO_ID)
+      if (!res.success) {
+        toast({ title: 'Erro ao restaurar', description: res.error, variant: 'destructive' })
+        return
+      }
+      setPullResult(res.restored!)
+      toast({ title: 'Dados restaurados com sucesso!' })
+    } catch {
+      toast({ title: 'Falha ao conectar com o Supabase.', variant: 'destructive' })
+    } finally {
+      setPullLoading(false)
+      setModalRestaurarAberto(false)
+    }
+  }
+
   async function forcarSyncCompleto() {
     setForceLoading(true)
     try {
@@ -561,6 +599,16 @@ function ConfiguracoesContent() {
                           onClick={() => toggleAtivoUsuario(u)}
                         >
                           {u.ativo ? 'Desativar' : 'Ativar'}
+                        </Button>
+                      )}
+                      {!Boolean(u.master) && u.id !== usuario?.id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-red-500 hover:text-red-700"
+                          onClick={() => setConfirmDeleteUser(u)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       )}
                     </div>
@@ -1026,27 +1074,61 @@ function ConfiguracoesContent() {
                 <span className="text-xs">{avancadoAberto ? '▲' : '▼'}</span>
               </button>
               {avancadoAberto && (
-                <div className="px-3 pb-3 pt-1 flex flex-wrap gap-2 border-t">
-                  <Button
+                <div className="border-t divide-y">
+                  <button
                     onClick={enviarDados}
                     disabled={pushLoading || !supabaseKey || totalPendente === 0}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
                   >
-                    <Upload className={`w-4 h-4 mr-2 ${pushLoading ? 'animate-pulse' : ''}`} />
-                    {pushLoading ? 'Enviando...' : 'Enviar dados locais'}
-                  </Button>
-                  <Button variant="outline" onClick={sincronizar} disabled={syncLoading || !supabaseKey}>
-                    <RefreshCw className={`w-4 h-4 mr-2 ${syncLoading ? 'animate-spin' : ''}`} />
-                    Importar preços
-                  </Button>
-                  <Button
-                    variant="outline"
+                    <Upload className={`w-4 h-4 shrink-0 text-muted-foreground ${pushLoading ? 'animate-pulse' : ''}`} />
+                    <div>
+                      <p className="text-sm font-medium">{pushLoading ? 'Enviando...' : 'Enviar dados locais'}</p>
+                      <p className="text-xs text-muted-foreground">Envia registros pendentes para o Supabase</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={sincronizar}
+                    disabled={syncLoading || !supabaseKey}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
+                  >
+                    <RefreshCw className={`w-4 h-4 shrink-0 text-muted-foreground ${syncLoading ? 'animate-spin' : ''}`} />
+                    <div>
+                      <p className="text-sm font-medium">{syncLoading ? 'Importando...' : 'Importar preços'}</p>
+                      <p className="text-xs text-muted-foreground">Puxa tabela de preços do Supabase</p>
+                    </div>
+                  </button>
+
+                  <button
                     onClick={forcarSyncCompleto}
                     disabled={forceLoading || !supabaseKey}
-                    className="text-orange-600 border-orange-400 hover:bg-orange-50"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-orange-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
                   >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${forceLoading ? 'animate-spin' : ''}`} />
-                    {forceLoading ? 'Forçando...' : 'Forçar sync completo'}
-                  </Button>
+                    <RefreshCw className={`w-4 h-4 shrink-0 text-orange-500 ${forceLoading ? 'animate-spin' : ''}`} />
+                    <div>
+                      <p className="text-sm font-medium text-orange-600">{forceLoading ? 'Forçando...' : 'Forçar sync completo'}</p>
+                      <p className="text-xs text-muted-foreground">Reenvia todos os registros, mesmo os já sincronizados</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => { setPullResult(null); setModalRestaurarAberto(true) }}
+                    disabled={!supabaseKey}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-violet-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
+                  >
+                    <RotateCcw className="w-4 h-4 shrink-0 text-violet-500" />
+                    <div>
+                      <p className="text-sm font-medium text-violet-600">Restaurar dados da nuvem</p>
+                      <p className="text-xs text-muted-foreground">Importa crianças, responsáveis e visitas do Supabase</p>
+                    </div>
+                  </button>
+
+                  {pullResult && (
+                    <div className="px-3 py-2.5 bg-green-50">
+                      <p className="text-xs font-semibold text-green-800">Restauração concluída:</p>
+                      <p className="text-xs text-green-700 mt-0.5">{pullResult.operadores} operador(es) · {pullResult.responsaveis} responsável(is) · {pullResult.criancas} criança(s) · {pullResult.visitas} visita(s) · {pullResult.fechamentos} fechamento(s) · {pullResult.configuracoes} configuração(ões)</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1325,6 +1407,70 @@ function ConfiguracoesContent() {
               </Button>
               <Button size="sm" onClick={alterarSenhaUsuario} disabled={savingPassword}>
                 {savingPassword ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Restaurar dados da nuvem */}
+      <Dialog
+        open={modalRestaurarAberto}
+        onOpenChange={(v) => { if (!v) setModalRestaurarAberto(false) }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Restaurar dados da nuvem</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-800">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Isso importa crianças, responsáveis, visitas e configurações de preço do Supabase para o banco local.
+                Registros existentes com o mesmo ID serão substituídos.
+                Dados que nunca foram sincronizados <strong>não podem ser recuperados</strong>.
+              </span>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => setModalRestaurarAberto(false)}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={restaurarDaNuvem} disabled={pullLoading}>
+                {pullLoading ? 'Restaurando...' : 'Restaurar'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Confirmar Exclusão de Usuário */}
+      <Dialog
+        open={Boolean(confirmDeleteUser)}
+        onOpenChange={(v) => { if (!v) setConfirmDeleteUser(null) }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Excluir usuário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-md px-3 py-2 text-xs text-red-700">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Tem certeza que deseja excluir <strong>{confirmDeleteUser?.nome}</strong>?
+                Esta ação não pode ser desfeita.
+              </span>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => setConfirmDeleteUser(null)}>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => confirmDeleteUser && excluirUsuario(confirmDeleteUser)}
+                disabled={deletingUser}
+              >
+                {deletingUser ? 'Excluindo...' : 'Excluir'}
               </Button>
             </div>
           </div>

@@ -6,10 +6,12 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useStore } from '@/store/useStore'
 import { formatCurrency, formatDate, formatTime } from '@/lib/utils'
 import { PrintPreviewModal } from '@/components/PrintPreviewModal'
 import { toast } from '@/hooks/useToast'
+import type { UsuarioItem } from '@/types'
 
 interface DayStats {
   total_visitas: number
@@ -36,7 +38,8 @@ export function Dashboard() {
 
   // Abertura
   const [modalAbertura, setModalAbertura] = useState(false)
-  const [operador, setOperador] = useState('')
+  const [operadorId, setOperadorId] = useState('')
+  const [usuarios, setUsuarios] = useState<UsuarioItem[]>([])
   const [suprimento, setSuprimento] = useState('')
   const [abrindo, setAbrindo] = useState(false)
 
@@ -57,6 +60,13 @@ export function Dashboard() {
     load()
   }, [])
 
+  useEffect(() => {
+    if (modalAbertura) {
+      window.api.users.list(estabelecimentoId).then((res: any) => setUsuarios(res ?? []))
+      setOperadorId('')
+    }
+  }, [modalAbertura])
+
   async function load() {
     setLoading(true)
     await Promise.all([refreshVisitas(), refreshCaixa()])
@@ -72,8 +82,9 @@ export function Dashboard() {
   }
 
   async function handleAbrirCaixa() {
-    if (!operador.trim()) {
-      toast({ title: 'Informe o nome do operador', variant: 'destructive' })
+    const usuario = usuarios.find(u => u.id === operadorId)
+    if (!usuario) {
+      toast({ title: 'Selecione o operador', variant: 'destructive' })
       return
     }
     setAbrindo(true)
@@ -81,7 +92,8 @@ export function Dashboard() {
       const suprimentoVal = parseFloat(suprimento.replace(',', '.')) || 0
       const result = await window.api.cash.open({
         estabelecimentoId,
-        operador_nome: operador.trim(),
+        operadorId: usuario.id,
+        operador_nome: usuario.nome,
         suprimento_inicial: suprimentoVal,
       })
 
@@ -89,7 +101,7 @@ export function Dashboard() {
         await refreshCaixa()
         const novoCaixa = await window.api.cash.current(estabelecimentoId)
         const printResult = await window.api.printer.caixaAbertura({
-          operador_nome: operador.trim(),
+          operador_nome: usuario.nome,
           suprimento_inicial: suprimentoVal,
           abertura_em: novoCaixa?.abertura_em ?? new Date().toISOString(),
         })
@@ -101,7 +113,7 @@ export function Dashboard() {
         }
 
         setModalAbertura(false)
-        setOperador('')
+        setOperadorId('')
         setSuprimento('')
         toast({ title: 'Caixa aberto com sucesso!' })
       }
@@ -158,6 +170,8 @@ export function Dashboard() {
         media_minutos: result.media_minutos,
         por_forma: result.por_forma,
         suprimento_inicial: result.suprimento_inicial,
+        total_descontos: result.total_descontos,
+        descontos_por_motivo: result.descontos_por_motivo,
       })
 
       if (simulacaoImpressao || !printResult.success) {
@@ -183,7 +197,7 @@ export function Dashboard() {
     <div className="p-6 space-y-6 pb-[var(--space-12)]">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <h1 className="text-2xl font-bold">Visão Geral</h1>
           <p className="text-muted-foreground text-sm">{formatDate(new Date())}</p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -320,15 +334,17 @@ export function Dashboard() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="operador">Operador</Label>
-              <Input
-                id="operador"
-                placeholder="Nome de quem está abrindo"
-                value={operador}
-                onChange={e => setOperador(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAbrirCaixa()}
-                autoFocus
-              />
+              <Label>Operador</Label>
+              <Select value={operadorId} onValueChange={setOperadorId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o operador" />
+                </SelectTrigger>
+                <SelectContent>
+                  {usuarios.filter(u => u.ativo).map(u => (
+                    <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="suprimento">Suprimento inicial (R$)</Label>

@@ -211,7 +211,8 @@ function buildBreakdown(minutos: number, config: ConfigPreco): string[] {
 function buildSaidaText(
   data: {
     criancaNome: string; responsavelNome?: string; entradaEm: string; saidaEm: string
-    minutos: number; valorTotal: number; formaPagamento?: string; ticketNumero?: number
+    minutos: number; valorTotal: number; valorOriginal?: number; descontoValor?: number
+    motivoDesconto?: string; formaPagamento?: string; ticketNumero?: number
     configuracao?: ConfigPreco
   },
   s: TicketSettings
@@ -223,6 +224,7 @@ function buildSaidaText(
   const dur = h > 0 ? `${h}h ${m}min` : `${m}min`
   const dataStr = saida.toLocaleDateString('pt-BR')
   const tels = [s.tel1, s.tel2].filter(Boolean).join('  ')
+  const hasDesconto = data.descontoValor && data.descontoValor > 0
 
   const breakdown = data.configuracao ? buildBreakdown(data.minutos, data.configuracao) : []
 
@@ -244,7 +246,15 @@ function buildSaidaText(
     hr(),
     ...breakdown,
     ...(breakdown.length ? [hr()] : []),
-    center(`PAGO ${brl(data.valorTotal)}`),
+    ...(hasDesconto ? [
+      col('VALOR ORIGINAL:', brl(data.valorOriginal ?? data.valorTotal)),
+      col('DESCONTO:',       `-${brl(data.descontoValor!)}`),
+      hr(),
+      center(`TOTAL PAGO ${brl(data.valorTotal)}`),
+      ...(data.motivoDesconto ? [`Motivo: ${data.motivoDesconto}`.slice(0, W)] : []),
+    ] : [
+      center(`PAGO ${brl(data.valorTotal)}`),
+    ]),
     ...(data.formaPagamento ? [`Pgto: ${data.formaPagamento}`.slice(0, W)] : []),
     ...buildFooter(s),
   ]
@@ -342,6 +352,9 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     saidaEm: string
     minutos: number
     valorTotal: number
+    valorOriginal?: number
+    descontoValor?: number
+    motivoDesconto?: string
     formaPagamento?: string
     ticketNumero?: number
     configuracao?: ConfigPreco
@@ -359,6 +372,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       const saida = new Date(data.saidaEm)
       const h = Math.floor(data.minutos / 60)
       const m = data.minutos % 60
+      const hasDesconto = data.descontoValor && data.descontoValor > 0
 
       printHeader(printer, s)
       printer.alignLeft()
@@ -380,16 +394,21 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
         for (const line of buildBreakdown(data.minutos, data.configuracao)) printer.println(line)
         printer.drawLine()
       }
+      if (hasDesconto) {
+        printer.alignLeft()
+        printer.println(col('VALOR ORIGINAL:', brl(data.valorOriginal ?? data.valorTotal)))
+        printer.println(col('DESCONTO:', `-${brl(data.descontoValor!)}`))
+        printer.drawLine()
+      }
       printer.bold(true)
       printer.alignCenter()
       printer.setTextSize(1, 1)
-      printer.println(`PAGO ${brl(data.valorTotal)}`)
+      printer.println(`${hasDesconto ? 'TOTAL PAGO' : 'PAGO'} ${brl(data.valorTotal)}`)
       printer.setTextNormal()
       printer.bold(false)
-      if (data.formaPagamento) {
-        printer.alignLeft()
-        printer.println(`Pgto: ${data.formaPagamento}`)
-      }
+      printer.alignLeft()
+      if (hasDesconto && data.motivoDesconto) printer.println(`Motivo: ${data.motivoDesconto}`)
+      if (data.formaPagamento) printer.println(`Pgto: ${data.formaPagamento}`)
 
       printFooter(printer, s)
       await printer.execute()
@@ -547,6 +566,8 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     media_minutos: number
     por_forma: Array<{ forma: string; total: number }>
     suprimento_inicial: number
+    total_descontos?: number
+    descontos_por_motivo?: Array<{ motivo: string; total: number }>
   }) => {
     const s = getSettings(db)
     const abertura = new Date(data.abertura_em)
@@ -565,10 +586,13 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       if (k.includes('dinheiro')) totalDinheiro += v
     }
     const totalBruto = data.por_forma.reduce((acc, f) => acc + f.total, 0)
+    const totalDescontos = data.total_descontos ?? 0
+    const totalLiquido = totalBruto - totalDescontos
     const totalEsperado = data.suprimento_inicial + totalDinheiro
     const h = Math.floor(data.media_minutos / 60)
     const m = data.media_minutos % 60
     const mediaStr = h > 0 ? `${h}h ${m}min` : `${m}min`
+    const motivosDesconto = data.descontos_por_motivo ?? []
 
     const lines: string[] = [
       HR(),
@@ -592,8 +616,14 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       ...FORMAS.map(forma => col(`${forma}:`, brlPad(formaMap[forma.toLowerCase()] ?? 0))),
       hr(),
       col('TOTAL BRUTO:', brlPad(totalBruto)),
-      col('Descontos:', brlPad(0)),
-      col('TOTAL LÍQUIDO:', brlPad(totalBruto)),
+      col('Descontos:', totalDescontos > 0 ? `-${brlPad(totalDescontos)}` : brlPad(0)),
+      col('TOTAL LÍQUIDO:', brlPad(totalLiquido)),
+      ...(motivosDesconto.length > 0 ? [
+        hr(),
+        center('DESCONTOS POR MOTIVO'),
+        hr(),
+        ...motivosDesconto.map(d => col(`${d.motivo}:`, brlPad(d.total))),
+      ] : []),
       hr(),
       center('CONFERÊNCIA DO CAIXA'),
       hr(),
@@ -635,10 +665,20 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       }
       printer.drawLine()
       printer.println(col('TOTAL BRUTO:', brlPad(totalBruto)))
-      printer.println(col('Descontos:', brlPad(0)))
+      printer.println(col('Descontos:', totalDescontos > 0 ? `-${brlPad(totalDescontos)}` : brlPad(0)))
       printer.bold(true)
-      printer.println(col('TOTAL LÍQUIDO:', brlPad(totalBruto)))
+      printer.println(col('TOTAL LÍQUIDO:', brlPad(totalLiquido)))
       printer.bold(false)
+      if (motivosDesconto.length > 0) {
+        printer.drawLine()
+        printer.alignCenter()
+        printer.println('DESCONTOS POR MOTIVO')
+        printer.alignLeft()
+        printer.drawLine()
+        for (const d of motivosDesconto) {
+          printer.println(col(`${d.motivo}:`, brlPad(d.total)))
+        }
+      }
       printer.drawLine()
       printer.alignCenter()
       printer.println('CONFERÊNCIA DO CAIXA')

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Printer, CheckCircle, Users, Check, Phone } from 'lucide-react'
+import { Printer, CheckCircle, Users, Check, Phone, Tag } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -35,6 +36,12 @@ export function Saida() {
   const [loading, setLoading] = useState(false)
   const [formaPagamento, setFormaPagamento] = useState('')
   const [precoPreview, setPrecoPreview] = useState<{ minutos: number; valor_estimado: number } | null>(null)
+
+  // Desconto
+  const [aplicarDesconto, setAplicarDesconto] = useState(false)
+  const [descontoTipo, setDescontoTipo] = useState<'percentual' | 'fixo'>('percentual')
+  const [descontoValorStr, setDescontoValorStr] = useState('')
+  const [motivoDesconto, setMotivoDesconto] = useState('')
 
   // Saída em grupo
   const [grupoSelecionado, setGrupoSelecionado] = useState<GrupoVisita | null>(null)
@@ -76,11 +83,25 @@ export function Saida() {
     }
   }, [location.state, visitasAtivas, grupos])
 
+  const descontoValorNum = parseFloat(descontoValorStr.replace(',', '.')) || 0
+
+  const valorComDesconto = useMemo(() => {
+    if (!aplicarDesconto || !precoPreview || descontoValorNum <= 0) return precoPreview?.valor_estimado ?? 0
+    if (descontoTipo === 'percentual') {
+      return Math.max(0, precoPreview.valor_estimado * (1 - descontoValorNum / 100))
+    }
+    return Math.max(0, precoPreview.valor_estimado - descontoValorNum)
+  }, [aplicarDesconto, descontoTipo, descontoValorNum, precoPreview])
+
   async function iniciarSaida(visita: Visita) {
     setSelecionada(visita)
     setCheckout(null)
     setFormaPagamento('')
     setPrecoPreview(null)
+    setAplicarDesconto(false)
+    setDescontoTipo('percentual')
+    setDescontoValorStr('')
+    setMotivoDesconto('')
     setDialogOpen(true)
     try {
       const preview = await window.api.visits.previewPrice(visita.id)
@@ -137,6 +158,7 @@ export function Saida() {
   }
 
   async function imprimirTicket(result: CheckoutResult, visita: Visita) {
+    const hasDesconto = result.desconto_valor && result.desconto_valor > 0
     const res = await window.api.printer.ticket({
       criancaNome: visita.crianca_nome ?? '',
       responsavelNome: visita.responsavel_nome,
@@ -144,6 +166,9 @@ export function Saida() {
       saidaEm: result.saida_em,
       minutos: result.minutos,
       valorTotal: result.valor_total,
+      valorOriginal: hasDesconto ? result.valor_original : undefined,
+      descontoValor: hasDesconto ? result.desconto_valor : undefined,
+      motivoDesconto: hasDesconto ? result.motivo_desconto : undefined,
       formaPagamento: result.forma_pagamento,
       ticketNumero: result.ticket_numero,
       configuracao: result.configuracao,
@@ -183,12 +208,23 @@ export function Saida() {
 
   async function confirmarSaida() {
     if (!selecionada) return
+    if (aplicarDesconto && descontoValorNum > 0 && !motivoDesconto) {
+      toast({ title: 'Motivo obrigatório', description: 'Informe o motivo do desconto.', variant: 'destructive' })
+      return
+    }
+    if (aplicarDesconto && descontoTipo === 'fixo' && precoPreview && descontoValorNum > precoPreview.valor_estimado) {
+      toast({ title: 'Desconto inválido', description: 'O desconto não pode ser maior que o valor da visita.', variant: 'destructive' })
+      return
+    }
     setLoading(true)
     try {
-      const result = await window.api.visits.checkout(selecionada.id, estabelecimentoId, formaPagamento || undefined)
-      setCheckout(result)
+      const desconto = aplicarDesconto && descontoValorNum > 0
+        ? { tipo: descontoTipo, valor: descontoValorNum, motivo: motivoDesconto }
+        : undefined
+      const result = await window.api.visits.checkout(selecionada.id, estabelecimentoId, formaPagamento || undefined, desconto)
+      setCheckout(result as CheckoutResult)
       removeVisitaAtiva(selecionada.id)
-      await imprimirTicket(result, selecionada)
+      await imprimirTicket(result as CheckoutResult, selecionada)
     } catch {
       toast({ title: 'Erro', description: 'Não foi possível registrar a saída.', variant: 'destructive' })
     }
@@ -222,6 +258,10 @@ export function Saida() {
     setCheckout(null)
     setFormaPagamento('')
     setPrecoPreview(null)
+    setAplicarDesconto(false)
+    setDescontoTipo('percentual')
+    setDescontoValorStr('')
+    setMotivoDesconto('')
   }
 
   function fecharGrupoDialog() {
@@ -366,15 +406,122 @@ export function Saida() {
                 <p className="text-sm text-muted-foreground">Entrada: {formatTime(selecionada.entrada_em)}</p>
                 <ChildTimer entradaEm={selecionada.entrada_em} className="text-lg mt-1" />
               </div>
+
+              {/* Valor estimado / com desconto */}
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
-                <p className="text-xs text-amber-700 mb-1">Valor estimado</p>
                 {precoPreview ? (
-                  <p className="text-3xl font-bold text-amber-800">{formatCurrency(precoPreview.valor_estimado)}</p>
+                  aplicarDesconto && descontoValorNum > 0 ? (
+                    <>
+                      <p className="text-xs text-amber-700 mb-1">Valor com desconto</p>
+                      <p className="text-xl line-through text-amber-500">{formatCurrency(precoPreview.valor_estimado)}</p>
+                      <p className="text-3xl font-bold text-amber-800">{formatCurrency(valorComDesconto)}</p>
+                      <p className="text-xs text-amber-600 mt-1">
+                        Desconto: {descontoTipo === 'percentual' ? `${descontoValorNum}%` : formatCurrency(descontoValorNum)}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-amber-700 mb-1">Valor estimado</p>
+                      <p className="text-3xl font-bold text-amber-800">{formatCurrency(precoPreview.valor_estimado)}</p>
+                      <p className="text-xs text-amber-600 mt-1">Calculado no momento da confirmação</p>
+                    </>
+                  )
                 ) : (
-                  <p className="text-3xl font-bold text-amber-800 opacity-40">—</p>
+                  <>
+                    <p className="text-xs text-amber-700 mb-1">Valor estimado</p>
+                    <p className="text-3xl font-bold text-amber-800 opacity-40">—</p>
+                  </>
                 )}
-                <p className="text-xs text-amber-600 mt-1">Calculado no momento da confirmação</p>
               </div>
+
+              {/* Toggle desconto */}
+              <div className="border rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setAplicarDesconto(v => !v)}
+                  className={cn(
+                    'w-full flex items-center justify-between px-4 py-3 text-sm font-medium transition-colors',
+                    aplicarDesconto ? 'bg-violet-50 text-violet-800' : 'bg-white text-slate-700 hover:bg-slate-50'
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <Tag className="w-4 h-4" />
+                    Aplicar desconto
+                  </span>
+                  <div className={cn(
+                    'w-9 h-5 rounded-full transition-colors relative',
+                    aplicarDesconto ? 'bg-violet-600' : 'bg-slate-200'
+                  )}>
+                    <div className={cn(
+                      'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
+                      aplicarDesconto ? 'translate-x-4' : 'translate-x-0.5'
+                    )} />
+                  </div>
+                </button>
+                {aplicarDesconto && (
+                  <div className="px-4 pb-4 pt-3 space-y-3 border-t bg-violet-50/30">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDescontoTipo('percentual')}
+                        className={cn(
+                          'flex-1 py-1.5 rounded text-xs font-medium border transition-colors',
+                          descontoTipo === 'percentual'
+                            ? 'bg-violet-600 text-white border-violet-600'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
+                        )}
+                      >
+                        Percentual (%)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDescontoTipo('fixo')}
+                        className={cn(
+                          'flex-1 py-1.5 rounded text-xs font-medium border transition-colors',
+                          descontoTipo === 'fixo'
+                            ? 'bg-violet-600 text-white border-violet-600'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
+                        )}
+                      >
+                        Valor fixo (R$)
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Valor do desconto</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                          {descontoTipo === 'percentual' ? '%' : 'R$'}
+                        </span>
+                        <Input
+                          className="pl-8 text-sm"
+                          placeholder="0"
+                          value={descontoValorStr}
+                          onChange={e => {
+                            const raw = e.target.value
+                            const num = parseFloat(raw.replace(',', '.'))
+                            const max = descontoTipo === 'percentual' ? 100 : (precoPreview?.valor_estimado ?? Infinity)
+                            if (!isNaN(num) && num > max) return
+                            setDescontoValorStr(raw)
+                          }}
+                          type="number"
+                          min="0"
+                          max={descontoTipo === 'percentual' ? 100 : precoPreview?.valor_estimado}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Motivo do desconto <span className="text-red-500">*</span></Label>
+                      <Input
+                        className="text-sm"
+                        placeholder="Ex: Cortesia, aniversariante..."
+                        value={motivoDesconto}
+                        onChange={e => setMotivoDesconto(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 <Label>Forma de pagamento <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
                 <Select value={formaPagamento} onValueChange={setFormaPagamento}>
@@ -396,7 +543,18 @@ export function Saida() {
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                 <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
                 <p className="font-semibold text-lg text-green-800">{selecionada.crianca_nome}</p>
-                <p className="text-2xl font-bold text-green-700 mt-1">{formatCurrency(checkout.valor_total)}</p>
+                {checkout.desconto_valor && checkout.desconto_valor > 0 ? (
+                  <>
+                    <p className="text-sm line-through text-green-500 mt-1">{formatCurrency(checkout.valor_original ?? 0)}</p>
+                    <p className="text-2xl font-bold text-green-700">{formatCurrency(checkout.valor_total)}</p>
+                    <p className="text-xs text-green-600">
+                      Desconto: {formatCurrency((checkout.valor_original ?? 0) - checkout.valor_total)}
+                      {checkout.desconto_tipo === 'percentual' && ` (${checkout.desconto_valor}%)`} • {checkout.motivo_desconto}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-2xl font-bold text-green-700 mt-1">{formatCurrency(checkout.valor_total)}</p>
+                )}
                 {checkout.forma_pagamento && (
                   <p className="text-sm text-green-600 mt-1">{checkout.forma_pagamento}</p>
                 )}

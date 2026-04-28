@@ -152,6 +152,7 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
     visitaId: string
     estabelecimentoId: string
     formaPagamento?: string
+    desconto?: { tipo: 'percentual' | 'fixo'; valor: number; motivo: string }
   }) => {
     const saidaEm = new Date().toISOString()
 
@@ -170,18 +171,28 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
       configuracaoAplicada = selecionarConfig(db, data.estabelecimentoId, visita.crianca_id)
     }
 
-    const valor = configuracaoAplicada ? calcularValor(minutosTotais, configuracaoAplicada) : 0
+    const valorOriginal = configuracaoAplicada ? calcularValor(minutosTotais, configuracaoAplicada) : 0
+    let valorFinal = valorOriginal
+    const desc = data.desconto && data.desconto.valor > 0 ? data.desconto : undefined
+    if (desc) {
+      if (desc.tipo === 'percentual') {
+        valorFinal = valorOriginal * (1 - desc.valor / 100)
+      } else {
+        valorFinal = Math.max(0, valorOriginal - desc.valor)
+      }
+      valorFinal = Math.round(valorFinal * 100) / 100
+    }
 
     const updateVisita = db.transaction(() => {
       db.prepare(`
-        UPDATE visitas SET saida_em = ?, valor_total = ?, forma_pagamento = ?, status = 'finalizada' WHERE id = ?
-      `).run(saidaEm, valor, data.formaPagamento ?? null, data.visitaId)
+        UPDATE visitas SET saida_em = ?, valor_total = ?, valor_original = ?, desconto_tipo = ?, desconto_valor = ?, motivo_desconto = ?, forma_pagamento = ?, status = 'finalizada' WHERE id = ?
+      `).run(saidaEm, valorFinal, valorOriginal, desc?.tipo ?? null, desc?.valor ?? null, desc?.motivo ?? null, data.formaPagamento ?? null, data.visitaId)
 
       if (configuracaoAplicada) {
         db.prepare(`
           INSERT INTO visita_faixas_aplicadas (id, visita_id, configuracao_preco_id, minutos, valor)
           VALUES (?, ?, ?, ?, ?)
-        `).run(randomUUID(), data.visitaId, configuracaoAplicada.id, minutosTotais, valor)
+        `).run(randomUUID(), data.visitaId, configuracaoAplicada.id, minutosTotais, valorFinal)
       }
     })
 
@@ -193,7 +204,11 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
       entrada_em: visita.entrada_em,
       saida_em: saidaEm,
       minutos: minutosTotais,
-      valor_total: valor,
+      valor_total: valorFinal,
+      valor_original: valorOriginal,
+      desconto_tipo: desc?.tipo,
+      desconto_valor: desc?.valor,
+      motivo_desconto: desc?.motivo,
       ticket_numero: visita.ticket_numero ?? undefined,
       forma_pagamento: data.formaPagamento,
       configuracao: configuracaoAplicada
@@ -415,5 +430,47 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
       "SELECT COUNT(*) as c FROM visitas WHERE estabelecimento_id = ? AND status = 'ativa'"
     ).get(estabelecimentoId) as any
     return r?.c ?? 0
+  })
+
+  ipcMain.handle('visits:ranking', (_event, { estabelecimentoId, dataInicio, dataFim }: {
+    estabelecimentoId: string
+    dataInicio?: string
+    dataFim?: string
+  }) => {
+    const conditions = ["v.estabelecimento_id = ?", "v.status = 'finalizada'"]
+    const params: unknown[] = [estabelecimentoId]
+    if (dataInicio) { conditions.push('date(v.entrada_em) >= ?'); params.push(dataInicio) }
+    if (dataFim)    { conditions.push('date(v.entrada_em) <= ?'); params.push(dataFim) }
+    const where = conditions.join(' AND ')
+
+    const porVisitas = db.prepare(`
+      SELECT c.id, c.nome as crianca_nome, r.nome as responsavel_nome,
+             COUNT(*) as total_visitas,
+             MAX(v.saida_em) as ultima_visita
+      FROM visitas v
+      JOIN criancas c ON v.crianca_id = c.id
+      LEFT JOIN responsaveis r ON v.responsavel_id = r.id
+      WHERE ${where}
+      GROUP BY c.id
+      ORDER BY total_visitas DESC
+      LIMIT 10
+    `).all(...params)
+
+    const porGasto = db.prepare(`
+      SELECT c.id, c.nome as crianca_nome, r.nome as responsavel_nome,
+             COALESCE(SUM(v.valor_total), 0) as total_gasto,
+             COUNT(*) as total_visitas,
+             COALESCE(AVG(v.valor_total), 0) as ticket_medio,
+             MAX(v.saida_em) as ultima_visita
+      FROM visitas v
+      JOIN criancas c ON v.crianca_id = c.id
+      LEFT JOIN responsaveis r ON v.responsavel_id = r.id
+      WHERE ${where}
+      GROUP BY c.id
+      ORDER BY total_gasto DESC
+      LIMIT 10
+    `).all(...params)
+
+    return { por_visitas: porVisitas, por_gasto: porGasto }
   })
 }

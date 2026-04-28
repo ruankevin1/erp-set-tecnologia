@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { Badge } from './ui/badge'
 
 const allNavItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'operador'] },
+  { to: '/', icon: LayoutDashboard, label: 'Visão Geral', roles: ['admin', 'operador'] },
   { to: '/entrada', icon: LogIn, label: 'Entrada', roles: ['admin', 'operador'] },
   { to: '/cadastros', icon: Users, label: 'Cadastros', roles: ['admin', 'operador'] },
   { to: '/monitoramento', icon: Monitor, label: 'Monitoramento', roles: ['admin', 'operador'] },
@@ -26,40 +26,88 @@ export function Sidebar() {
     ? Object.values(syncStatus.pendentes).reduce((a, b) => a + b, 0)
     : 0
 
-  const statusInfo = (() => {
+  const syncState = (() => {
     if (!isOnline) return {
-      icon: <WifiOff className="w-3 h-3 text-red-400 shrink-0" />,
-      label: totalPendente > 0
-        ? `Offline — ${totalPendente} pendente${totalPendente !== 1 ? 's' : ''}`
-        : 'Offline',
-      color: 'text-red-400'
+      icon: <WifiOff className="w-3.5 h-3.5 shrink-0" />,
+      label: 'Sem conexão',
+      sub: totalPendente > 0 ? `${totalPendente} registro${totalPendente !== 1 ? 's' : ''} aguardando` : undefined,
+      color: 'text-red-400',
+      border: 'border-red-500',
+      bg: 'bg-red-950/30',
     }
     if (isSyncing) return {
-      icon: <Loader2 className="w-3 h-3 text-yellow-400 shrink-0 animate-spin" />,
+      icon: <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />,
       label: 'Sincronizando...',
-      color: 'text-yellow-400'
+      sub: totalPendente > 0 ? `${totalPendente} registro${totalPendente !== 1 ? 's' : ''}` : undefined,
+      color: 'text-yellow-400',
+      border: 'border-yellow-500',
+      bg: 'bg-yellow-950/30',
     }
     if (totalPendente > 0) return {
-      icon: <CloudOff className="w-3 h-3 text-orange-400 shrink-0" />,
-      label: `${totalPendente} pendente${totalPendente !== 1 ? 's' : ''}`,
-      color: 'text-orange-400'
+      icon: <CloudOff className="w-3.5 h-3.5 shrink-0" />,
+      label: 'Pendente',
+      sub: `${totalPendente} registro${totalPendente !== 1 ? 's' : ''} aguardando`,
+      color: 'text-orange-400',
+      border: 'border-orange-500',
+      bg: 'bg-orange-950/30',
     }
     return {
-      icon: <CheckCircle className="w-3 h-3 text-green-400 shrink-0" />,
-      label: 'Online ✓',
-      color: 'text-green-400'
+      icon: <CheckCircle className="w-3.5 h-3.5 shrink-0" />,
+      label: 'Sincronizado',
+      sub: undefined,
+      color: 'text-green-400',
+      border: 'border-green-600',
+      bg: 'bg-green-950/30',
     }
   })()
 
   return (
     <aside className="w-56 bg-slate-900 text-slate-100 flex flex-col h-screen shrink-0">
-      {/* Logo */}
-      <div className="px-4 py-5 border-b border-slate-700 flex items-center justify-center">
-        <p className="font-bold text-sm text-center leading-tight">{nomeEstabelecimento}</p>
+      {/* Cabeçalho do estabelecimento */}
+      <div className="px-4 py-4 border-b border-slate-700">
+        <div className="flex items-center gap-3" title={nomeEstabelecimento}>
+          {/* Avatar com iniciais */}
+          <div
+            className="shrink-0 flex items-center justify-center text-white font-bold text-base select-none"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+            }}
+          >
+            {nomeEstabelecimento
+              .split(' ')
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((w) => w[0].toUpperCase())
+              .join('')}
+          </div>
+
+          {/* Textos */}
+          <div className="min-w-0 flex-1">
+            <p className="font-bold text-white text-sm leading-tight">
+              {nomeEstabelecimento}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Status de sincronização */}
+      <div className="px-3 pt-3 pb-1">
+        <div className={cn('rounded-md px-3 py-2.5 border-l-2', syncState.bg, syncState.border)}>
+          <div className="flex items-center gap-2">
+            <span className={syncState.color}>{syncState.icon}</span>
+            <span className={cn('text-xs font-semibold', syncState.color)}>{syncState.label}</span>
+          </div>
+          {syncState.sub && (
+            <p className="text-[10px] text-slate-500 mt-0.5 ml-[22px]">{syncState.sub}</p>
+          )}
+        </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-4 space-y-1">
+      <nav className="flex-1 px-2 py-2 space-y-1">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
@@ -92,14 +140,6 @@ export function Sidebar() {
           </div>
         </div>
       )}
-
-      {/* Status */}
-      <div className="px-4 py-3 border-t border-slate-700">
-        <div className="flex items-center gap-2 text-xs">
-          {statusInfo.icon}
-          <span className={cn('truncate', statusInfo.color)}>{statusInfo.label}</span>
-        </div>
-      </div>
 
       {/* Usuário logado */}
       {usuario && (

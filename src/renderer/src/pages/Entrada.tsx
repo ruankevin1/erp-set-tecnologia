@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { UserPlus, ArrowRight, AlertTriangle, Users, CheckSquare } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -7,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { PrintPreviewModal } from '@/components/PrintPreviewModal'
+import { DatePickerInput } from '@/components/DatePickerInput'
 import { CaixaFechadoModal } from '@/components/CaixaFechadoModal'
 import { useStore } from '@/store/useStore'
 import { useToast } from '@/hooks/useToast'
@@ -16,6 +18,7 @@ import type { Crianca, GuardianSearchResult } from '@/types'
 export function Entrada() {
   const { estabelecimentoId, visitasAtivas, caixaAtual, addVisitaAtiva, simulacaoImpressao } = useStore()
   const { toast } = useToast()
+  const location = useLocation()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Crianca[]>([])
   const [loading, setLoading] = useState(false)
@@ -65,6 +68,18 @@ export function Entrada() {
     const timer = setTimeout(buscar, 300)
     return () => clearTimeout(timer)
   }, [query])
+
+  useEffect(() => {
+    const state = location.state as { criancaId?: string; criancaNome?: string } | null
+    if (!state?.criancaId) return
+    window.api.children.get(state.criancaId).then((c: Crianca | null) => {
+      if (!c) return
+      setQuery(c.nome)
+      selecionarCrianca(c)
+    }).catch(() => {
+      if (state.criancaNome) setQuery(state.criancaNome)
+    })
+  }, [location.state])
 
   useEffect(() => {
     if (linkedGuardian || novoResp.trim().length < 2) {
@@ -646,7 +661,7 @@ export function Entrada() {
                 Data de nascimento{' '}
                 <span className="text-muted-foreground font-normal text-xs">(opcional)</span>
               </Label>
-              <Input type="date" value={novoNasc} onChange={(e) => setNovoNasc(e.target.value)} />
+              <DatePickerInput value={novoNasc} onChange={setNovoNasc} fromYear={2013} />
             </div>
 
             <div className="space-y-1.5">

@@ -16,6 +16,11 @@ export function initDatabase(): Database.Database {
   console.log('[DB] Banco de dados:', dbPath)
   db = new Database(dbPath)
 
+  db.function('normalize_text', (text: unknown) => {
+    if (!text) return ''
+    return String(text).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  })
+
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
 
@@ -181,6 +186,7 @@ function runMigrations(db: Database.Database): void {
   migrateCriancasColunas(db)
   migrateFechamentosCaixaColunas(db)
   migrateOperadoresColunas(db)
+  migrateEstabelecimentosColunas(db)
   ensureConfiguracoesSistema(db)
   ensureEstabelecimento(db)
   ensureDefaultPricingConfig(db)
@@ -241,6 +247,10 @@ function migrateVisitasColunas(db: Database.Database): void {
   if (!cols.has('ticket_numero')) db.exec('ALTER TABLE visitas ADD COLUMN ticket_numero INTEGER')
   if (!cols.has('forma_pagamento')) db.exec('ALTER TABLE visitas ADD COLUMN forma_pagamento TEXT')
   if (!cols.has('configuracao_preco_snapshot')) db.exec('ALTER TABLE visitas ADD COLUMN configuracao_preco_snapshot TEXT')
+  if (!cols.has('valor_original')) db.exec('ALTER TABLE visitas ADD COLUMN valor_original REAL')
+  if (!cols.has('desconto_tipo')) db.exec('ALTER TABLE visitas ADD COLUMN desconto_tipo TEXT')
+  if (!cols.has('desconto_valor')) db.exec('ALTER TABLE visitas ADD COLUMN desconto_valor REAL')
+  if (!cols.has('motivo_desconto')) db.exec('ALTER TABLE visitas ADD COLUMN motivo_desconto TEXT')
 }
 
 function ensureConfiguracoesSistema(db: Database.Database): void {
@@ -306,6 +316,13 @@ function ensureAdminMaster(db: Database.Database): void {
     `).run(randomUUID(), estabId, hash)
     console.log('[DB] Admin master criado')
   }
+}
+
+function migrateEstabelecimentosColunas(db: Database.Database): void {
+  const cols = new Set(
+    (db.prepare('PRAGMA table_info(estabelecimentos)').all() as { name: string }[]).map(r => r.name)
+  )
+  if (!cols.has('configuracoes')) db.exec('ALTER TABLE estabelecimentos ADD COLUMN configuracoes TEXT')
 }
 
 function migrateConfiguracoesPrecoColunas(db: Database.Database): void {

@@ -102,6 +102,19 @@ export function registerUsersHandlers(ipcMain: IpcMain, db: Database.Database): 
     }
   })
 
+  ipcMain.handle('users:delete', (_event, { id }: { id: string }) => {
+    try {
+      const user = db.prepare('SELECT master FROM operadores WHERE id = ?').get(id) as any
+      if (!user) return { ok: false, erro: 'Usuário não encontrado' }
+      if (user.master) return { ok: false, erro: 'Usuário master não pode ser excluído' }
+      db.prepare('DELETE FROM operadores WHERE id = ?').run(id)
+      return { ok: true }
+    } catch (err) {
+      console.error('[users:delete]', err)
+      return { ok: false, erro: 'Erro ao excluir usuário' }
+    }
+  })
+
   ipcMain.handle('users:change-password', async (_event, data: {
     id: string; senhaAtual?: string; novaSenha: string
   }) => {

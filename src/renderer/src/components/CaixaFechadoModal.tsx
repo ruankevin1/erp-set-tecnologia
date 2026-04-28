@@ -20,7 +20,7 @@ export function CaixaFechadoModal({ open, onClose }: Props) {
             <h2 className="text-lg font-bold">Caixa fechado</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
               O caixa precisa estar aberto para registrar entradas. Acesse o{' '}
-              <span className="font-medium text-foreground">Dashboard</span> para abrir o caixa.
+              <span className="font-medium text-foreground">Visão Geral</span> para abrir o caixa.
             </p>
           </div>
 

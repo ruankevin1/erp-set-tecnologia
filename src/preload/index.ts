@@ -25,15 +25,17 @@ const api = {
     active: (estabelecimentoId: string) => ipcRenderer.invoke('visits:active', estabelecimentoId),
     create: (data: any) => ipcRenderer.invoke('visits:create', data),
     createBatch: (data: any) => ipcRenderer.invoke('visits:create-batch', data),
-    checkout: (visitaId: string, estabelecimentoId: string, formaPagamento?: string) =>
-      ipcRenderer.invoke('visits:checkout', { visitaId, estabelecimentoId, formaPagamento }),
+    checkout: (visitaId: string, estabelecimentoId: string, formaPagamento?: string, desconto?: { tipo: 'percentual' | 'fixo'; valor: number; motivo: string }) =>
+      ipcRenderer.invoke('visits:checkout', { visitaId, estabelecimentoId, formaPagamento, desconto }),
     checkoutGroup: (data: any) => ipcRenderer.invoke('visits:checkout-group', data),
     previewPrice: (visitaId: string) => ipcRenderer.invoke('visits:preview-price', visitaId),
     pricing: (estabelecimentoId: string) => ipcRenderer.invoke('visits:pricing', estabelecimentoId),
     history: (estabelecimentoId: string, limit?: number, offset?: number, dataInicio?: string, dataFim?: string) =>
       ipcRenderer.invoke('visits:history', { estabelecimentoId, limit, offset, dataInicio, dataFim }),
     stats: (estabelecimentoId: string, data: string) =>
-      ipcRenderer.invoke('visits:stats', { estabelecimentoId, data })
+      ipcRenderer.invoke('visits:stats', { estabelecimentoId, data }),
+    ranking: (estabelecimentoId: string, dataInicio?: string, dataFim?: string) =>
+      ipcRenderer.invoke('visits:ranking', { estabelecimentoId, dataInicio, dataFim }),
   },
   pricing: {
     get: (estabelecimentoId: string) => ipcRenderer.invoke('pricing:get', estabelecimentoId),
@@ -61,6 +63,11 @@ const api = {
       ipcRenderer.invoke('sync:fetch-config', { supabaseKey, estabelecimentoId }),
     pushData: () => ipcRenderer.invoke('sync:push-data'),
     resetAll: () => ipcRenderer.invoke('sync:reset-all'),
+    pullAll: (estabelecimentoId: string) =>
+      ipcRenderer.invoke('sync:pull-all', { estabelecimentoId }) as Promise<{
+        success: boolean; error?: string
+        restored?: { operadores: number; responsaveis: number; criancas: number; visitas: number; faixas: number; fechamentos: number; configuracoes: number }
+      }>,
     onStatusUpdate: (callback: (data: { isSyncing: boolean; pendentes?: any }) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data)
       ipcRenderer.on('sync:status-update', handler)
@@ -72,7 +79,8 @@ const api = {
     open: (data: any) => ipcRenderer.invoke('cash:open', data),
     stats: (caixaId: string) => ipcRenderer.invoke('cash:stats', caixaId),
     close: (data: { caixaId: string; observacoes?: string }) => ipcRenderer.invoke('cash:close', data),
-    history: (estabelecimentoId: string, limit?: number) => ipcRenderer.invoke('cash:history', { estabelecimentoId, limit })
+    history: (estabelecimentoId: string, limit?: number, dataInicio?: string, dataFim?: string) =>
+      ipcRenderer.invoke('cash:history', { estabelecimentoId, limit, dataInicio, dataFim })
   },
   auth: {
     login: (login: string, senha: string) =>
@@ -88,6 +96,8 @@ const api = {
     toggleActive: (id: string) => ipcRenderer.invoke('users:toggle-active', { id }),
     changePassword: (data: { id: string; senhaAtual?: string; novaSenha: string }) =>
       ipcRenderer.invoke('users:change-password', data) as Promise<{ ok: boolean; erro?: string }>,
+    delete: (id: string) =>
+      ipcRenderer.invoke('users:delete', { id }) as Promise<{ ok: boolean; erro?: string }>,
   },
   app: {
     openDataFolder: () => ipcRenderer.invoke('app:open-data-folder'),

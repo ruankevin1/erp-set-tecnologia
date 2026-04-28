@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Toaster } from './ui/toaster'
@@ -12,6 +12,7 @@ export function Layout() {
   const { setUpdateAvailable, setUpdateDownloaded, setDownloadProgress, setNomeEstabelecimento } = useStore()
   const { usuario } = useAuthStore()
   const { toast } = useToast()
+  const toastShown = useRef(false)
 
   useEffect(() => {
     window.api.settings.get('estabelecimento_nome').then((nome) => {
@@ -20,7 +21,8 @@ export function Layout() {
   }, [])
 
   useEffect(() => {
-    if (usuario?.senhapadrao) {
+    if (usuario?.senhapadrao && !toastShown.current) {
+      toastShown.current = true
       toast({
         title: 'Senha padrão detectada',
         description: 'Você está usando a senha padrão (admin). Recomendamos trocar em Configurações → Usuários.',

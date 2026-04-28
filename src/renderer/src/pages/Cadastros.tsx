@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { PrintPreviewModal } from '@/components/PrintPreviewModal'
 import { CaixaFechadoModal } from '@/components/CaixaFechadoModal'
+import { DatePickerInput } from '@/components/DatePickerInput'
 import { useStore } from '@/store/useStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useToast } from '@/hooks/useToast'
@@ -918,7 +919,7 @@ export function Cadastros() {
               </div>
               <div className="space-y-1.5">
                 <Label>Data de nascimento</Label>
-                <Input type="date" value={addChildNasc} onChange={(e) => setAddChildNasc(e.target.value)} />
+                <DatePickerInput value={addChildNasc} onChange={setAddChildNasc} fromYear={2013} />
               </div>
               <div className="space-y-1.5">
                 <Label>CPF <span className="text-muted-foreground font-normal">(opcional)</span></Label>
@@ -1091,7 +1092,7 @@ export function Cadastros() {
             </div>
             <div className="space-y-1.5">
               <Label>Data de nascimento <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
-              <Input type="date" value={editForm.nascimento} onChange={(e) => setEditForm(f => ({ ...f, nascimento: e.target.value }))} />
+              <DatePickerInput value={editForm.nascimento} onChange={(v) => setEditForm(f => ({ ...f, nascimento: v }))} fromYear={2013} />
             </div>
             <div className="space-y-1.5">
               <Label>CPF <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
@@ -1246,7 +1247,7 @@ export function Cadastros() {
             </div>
             <div className="space-y-1.5">
               <Label>Data de nascimento <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
-              <Input type="date" value={novaChildNasc} onChange={(e) => setNovaChildNasc(e.target.value)} />
+              <DatePickerInput value={novaChildNasc} onChange={setNovaChildNasc} fromYear={2013} />
             </div>
             <div className="space-y-1.5">
               <Label>CPF <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>

@@ -5,6 +5,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from './constants'
 const TABLES = [
   'estabelecimentos',
   'configuracoes_preco',
+  'operadores',
   'responsaveis',
   'criancas',
   'visitas',
@@ -84,6 +85,15 @@ function getSetting(key: string): string | null {
   }
 }
 
+function getAllSettings(db: Database.Database): Record<string, string> {
+  try {
+    const rows = db.prepare(
+      "SELECT chave, valor FROM configuracoes_sistema WHERE chave != 'supabase_key'"
+    ).all() as { chave: string; valor: string }[]
+    return Object.fromEntries(rows.map(r => [r.chave, r.valor]))
+  } catch { return {} }
+}
+
 export function getPendentes(db: Database.Database): {
   estabelecimentos: number
   configuracoes_preco: number
@@ -102,6 +112,7 @@ export function getPendentes(db: Database.Database): {
   return {
     estabelecimentos: count('estabelecimentos'),
     configuracoes_preco: count('configuracoes_preco'),
+    operadores: count('operadores'),
     responsaveis: count('responsaveis'),
     criancas: count('criancas'),
     visitas: count('visitas'),
@@ -125,10 +136,15 @@ export async function pushToSupabase(
     const pushedKey = table === 'logs_auditoria' ? 'logs' : table
     pushed[pushedKey] = 0
     try {
+      if (table === 'estabelecimentos') {
+        const settings = getAllSettings(db)
+        db.prepare('UPDATE estabelecimentos SET configuracoes = ?, sincronizado = 0')
+          .run(JSON.stringify(settings))
+      }
       const rows = db.prepare(`SELECT * FROM ${table} WHERE sincronizado = 0`).all() as any[]
       if (rows.length === 0) continue
 
-      const clean = rows.map(({ sincronizado: _s, ...rest }) => rest)
+      const clean = rows.map(({ sincronizado: _s, senha_hash: _h, ...rest }) => rest)
       console.log(`[sync] ${table}: ${rows.length} registro(s)`)
 
       const res = await fetch(`${supabaseUrl}/rest/v1/${table}`, {

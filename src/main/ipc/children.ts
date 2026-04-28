@@ -3,6 +3,10 @@ import Database from 'better-sqlite3'
 import { randomUUID } from 'crypto'
 import { triggerSync } from '../sync-service'
 
+function norm(q: string): string {
+  return q.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+}
+
 export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle('children:list', (_event, estabelecimentoId: string) => {
     return db.prepare(`
@@ -22,15 +26,16 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
       LEFT JOIN responsaveis r ON c.responsavel_id = r.id
       LEFT JOIN visitas v ON c.id = v.crianca_id
       WHERE c.estabelecimento_id = ?
-        AND (c.nome LIKE ? OR r.nome LIKE ? OR r.telefone LIKE ?)
+        AND (normalize_text(c.nome) LIKE ? OR normalize_text(r.nome) LIKE ? OR r.telefone LIKE ?)
       GROUP BY c.id
       ORDER BY c.nome
       LIMIT 20
-    `).all(estabelecimentoId, `%${query}%`, `%${query}%`, `%${query}%`)
+    `).all(estabelecimentoId, `%${norm(query)}%`, `%${norm(query)}%`, `%${query}%`)
   })
 
   ipcMain.handle('children:list-with-stats', (_event, { estabelecimentoId, query }: { estabelecimentoId: string; query?: string }) => {
-    const q = query && query.trim().length >= 1 ? `%${query.trim()}%` : null
+    const rawQ = query && query.trim().length >= 1 ? `%${query.trim()}%` : null
+    const normQ = query && query.trim().length >= 1 ? `%${norm(query.trim())}%` : null
     const base = `
       SELECT c.id, c.nome, c.data_nascimento, c.cpf, c.observacoes, c.responsavel_id,
         r.nome as responsavel_nome, r.cpf as responsavel_cpf,
@@ -46,9 +51,9 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
       LEFT JOIN visitas v ON c.id = v.crianca_id
       WHERE c.estabelecimento_id = ?
     `
-    if (q) {
-      return db.prepare(`${base} AND (c.nome LIKE ? OR r.nome LIKE ? OR r.telefone LIKE ? OR r.cpf LIKE ? OR c.cpf LIKE ?) GROUP BY c.id ORDER BY c.nome`)
-        .all(estabelecimentoId, q, q, q, q, q)
+    if (normQ) {
+      return db.prepare(`${base} AND (normalize_text(c.nome) LIKE ? OR normalize_text(r.nome) LIKE ? OR r.telefone LIKE ? OR r.cpf LIKE ? OR c.cpf LIKE ?) GROUP BY c.id ORDER BY c.nome`)
+        .all(estabelecimentoId, normQ, normQ, rawQ, rawQ, rawQ)
     }
     return db.prepare(`${base} GROUP BY c.id ORDER BY c.nome`).all(estabelecimentoId)
   })
@@ -220,11 +225,11 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
         COUNT(c.id) as total_criancas
       FROM responsaveis r
       LEFT JOIN criancas c ON c.responsavel_id = r.id
-      WHERE r.estabelecimento_id = ? AND (r.nome LIKE ? OR r.cpf LIKE ? OR r.telefone LIKE ?)
+      WHERE r.estabelecimento_id = ? AND (normalize_text(r.nome) LIKE ? OR r.cpf LIKE ? OR r.telefone LIKE ?)
       GROUP BY r.id
       ORDER BY r.nome
       LIMIT 10
-    `).all(estabelecimentoId, `%${query}%`, `%${query}%`, `%${query}%`)
+    `).all(estabelecimentoId, `%${norm(query)}%`, `%${query}%`, `%${query}%`)
   })
 
   ipcMain.handle('guardians:get-children', (_event, guardianId: string) => {

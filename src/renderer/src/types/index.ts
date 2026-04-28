@@ -96,6 +96,10 @@ export interface Visita {
   entrada_em: string
   saida_em?: string
   valor_total?: number
+  valor_original?: number
+  desconto_tipo?: 'percentual' | 'fixo'
+  desconto_valor?: number
+  motivo_desconto?: string
   status: 'ativa' | 'finalizada' | 'cancelada'
   ticket_numero?: number
   forma_pagamento?: string
@@ -115,9 +119,31 @@ export interface CheckoutResult {
   saida_em: string
   minutos: number
   valor_total: number
+  valor_original?: number
+  desconto_tipo?: 'percentual' | 'fixo'
+  desconto_valor?: number
+  motivo_desconto?: string
   ticket_numero?: number
   forma_pagamento?: string
   configuracao?: ConfiguracaoPreco
+}
+
+export interface RankingVisita {
+  id: string
+  crianca_nome: string
+  responsavel_nome?: string
+  total_visitas: number
+  ultima_visita?: string
+}
+
+export interface RankingGasto {
+  id: string
+  crianca_nome: string
+  responsavel_nome?: string
+  total_gasto: number
+  total_visitas: number
+  ticket_medio: number
+  ultima_visita?: string
 }
 
 export interface FechamentoCaixa {
@@ -180,6 +206,7 @@ export interface SyncStatus {
   pendentes: {
     estabelecimentos: number
     configuracoes_preco: number
+    operadores: number
     responsaveis: number
     criancas: number
     visitas: number
@@ -193,6 +220,7 @@ export interface SyncPushResult {
   success: boolean
   pushed: {
     estabelecimentos: number
+    operadores: number
     responsaveis: number
     criancas: number
     visitas: number
