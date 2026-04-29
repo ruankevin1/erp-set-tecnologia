@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils'
 import { useStore } from '@/store/useStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { Badge } from './ui/badge'
-import { version } from '../../../../package.json'
 
 const allNavItems = [
   { to: '/', icon: LayoutDashboard, label: 'Visão Geral', roles: ['admin', 'operador'] },
@@ -168,7 +167,6 @@ export function Sidebar() {
         <div>
           <p className="text-xs text-slate-400 font-medium">Desenvolvido por Set Tecnologia</p>
           <p className="text-xs text-slate-500">(54) 9 9297-7120</p>
-          <p className="text-xs text-slate-600">v{version}</p>
         </div>
         <button
           onClick={() => window.open('https://wa.me/5554992977120?text=Olá,%20preciso%20de%20suporte%20no%20ERP%20Set%20Tecnologia')}
