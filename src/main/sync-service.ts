@@ -140,23 +140,35 @@ export async function pushToSupabase(
     try {
       if (table === 'estabelecimentos') {
         const settings = getAllSettings(db)
-        db.prepare('UPDATE estabelecimentos SET configuracoes = ?, sincronizado = 0')
-          .run(JSON.stringify(settings))
+        const json = JSON.stringify(settings)
+        const current = (_db!.prepare('SELECT configuracoes FROM estabelecimentos LIMIT 1').get() as any)?.configuracoes
+        if (current !== json) {
+          db.prepare('UPDATE estabelecimentos SET configuracoes = ?, sincronizado = 0').run(json)
+        }
       }
 
-      // Soft-delete tables: push real DELETEs to Supabase before upserting
+      // Soft-delete tables: push deletado_em via PATCH to preserve FK references
       if (SOFT_DELETE_TABLES.has(table)) {
         const deleted = db.prepare(
-          `SELECT id FROM ${table} WHERE deletado_em IS NOT NULL AND sincronizado = 0`
-        ).all() as { id: string }[]
-        for (const { id } of deleted) {
-          const delRes = await fetch(`${supabaseUrl}/rest/v1/${table}?id=eq.${id}`, {
-            method: 'DELETE',
-            headers: { apikey: apiKey, Authorization: `Bearer ${supabaseKey}` }
+          `SELECT id, deletado_em FROM ${table} WHERE deletado_em IS NOT NULL AND sincronizado = 0`
+        ).all() as { id: string; deletado_em: string }[]
+        for (const { id, deletado_em } of deleted) {
+          const patchRes = await fetch(`${supabaseUrl}/rest/v1/${table}?id=eq.${id}`, {
+            method: 'PATCH',
+            headers: {
+              apikey: apiKey,
+              Authorization: `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal'
+            },
+            body: JSON.stringify({ deletado_em })
           })
-          if (delRes.ok || delRes.status === 404) {
+          if (patchRes.ok || patchRes.status === 404) {
             db.prepare(`UPDATE ${table} SET sincronizado = 1 WHERE id = ?`).run(id)
             pushed[pushedKey] = (pushed[pushedKey] ?? 0) + 1
+          } else {
+            const body = await patchRes.text()
+            console.error(`[sync] PATCH ${table} HTTP ${patchRes.status}:`, body)
           }
         }
       }

@@ -18,6 +18,7 @@ export function Ativacao({ onAtivado }: Props) {
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState(false)
+  const [restaurando, setRestaurando] = useState(false)
 
   async function ativar() {
     const chaveT = chave.trim()
@@ -47,7 +48,10 @@ export function Ativacao({ onAtivado }: Props) {
       await window.api.settings.set('estabelecimento_id', estabId)
       if (payload.nome) await window.api.settings.set('estabelecimento_nome', String(payload.nome))
       setSucesso(true)
-      setTimeout(() => onAtivado(estabId), 1200)
+      setRestaurando(true)
+      await window.api.sync.pullAll(estabId)
+      setRestaurando(false)
+      setTimeout(() => onAtivado(estabId), 800)
     } catch (err: any) {
       setErro(`Erro ao verificar chave: ${err?.message ?? 'falha de conexão'}. Verifique a internet.`)
       setLoading(false)
@@ -91,8 +95,10 @@ export function Ativacao({ onAtivado }: Props) {
 
             {sucesso && (
               <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 text-sm">
-                <CheckCircle className="w-4 h-4 shrink-0" />
-                <span>Sistema ativado com sucesso! Carregando...</span>
+                {restaurando
+                  ? <><RefreshCw className="w-4 h-4 shrink-0 animate-spin" /><span>Restaurando dados da nuvem...</span></>
+                  : <><CheckCircle className="w-4 h-4 shrink-0" /><span>Sistema ativado! Entrando...</span></>
+                }
               </div>
             )}
 

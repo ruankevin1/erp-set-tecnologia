@@ -69,8 +69,8 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
           fetchAll('estabelecimentos', `id=eq.${estabelecimentoId}`),
           fetchAll('configuracoes_preco', f),
           fetchAll('operadores', f),
-          fetchAll('responsaveis', f),
-          fetchAll('criancas', f),
+          fetchAll('responsaveis', `${f}&deletado_em=is.null`),
+          fetchAll('criancas', `${f}&deletado_em=is.null`),
           fetchAll('visitas', f),
           fetchAll('fechamentos_caixa', f),
         ])
