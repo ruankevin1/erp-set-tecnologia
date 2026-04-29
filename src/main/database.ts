@@ -199,9 +199,9 @@ function runMigrations(db: Database.Database): void {
 function deduplicateAdminMasters(db: Database.Database): void {
   const masters = db.prepare('SELECT id FROM operadores WHERE master = 1 ORDER BY rowid').all() as { id: string }[]
   if (masters.length > 1) {
-    const del = db.prepare('DELETE FROM operadores WHERE id = ?')
-    for (const { id } of masters.slice(1)) del.run(id)
-    console.log(`[DB] Removidos ${masters.length - 1} admin master(s) duplicados`)
+    const upd = db.prepare('UPDATE operadores SET master = 0, ativo = 0 WHERE id = ?')
+    for (const { id } of masters.slice(1)) upd.run(id)
+    console.log(`[DB] Desativados ${masters.length - 1} admin master(s) duplicados`)
   }
 }
 
