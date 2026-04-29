@@ -604,7 +604,7 @@ export function Saida() {
           </DialogHeader>
 
           {!grupoCheckout && grupoSelecionado && (
-            <div className="space-y-4 overflow-y-auto flex-1 pr-0.5">
+            <div className="space-y-4 overflow-y-auto flex-1 px-1">
               {/* Cabeçalho do responsável */}
               {grupoSelecionado.responsavel_nome && (
                 <div className="flex items-center gap-3 px-4 py-3 bg-violet-50 border border-violet-100 rounded-lg">
