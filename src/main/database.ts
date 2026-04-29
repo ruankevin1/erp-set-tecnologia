@@ -322,10 +322,12 @@ function ensureAdminMaster(db: Database.Database): void {
     const estabId = process.env.VITE_ESTABELECIMENTO_ID ?? '539eef80-ec1a-4567-98a2-f5dd0ab1c8c4'
     const hash = bcrypt.hashSync('admin', 10)
     db.prepare(`
-      INSERT INTO operadores (id, estabelecimento_id, nome, login, senha_hash, nivel_acesso, master, ativo)
-      VALUES (?, ?, 'Admin Master', 'admin', ?, 'admin', 1, 1)
+      INSERT INTO operadores (id, estabelecimento_id, nome, login, senha_hash, nivel_acesso, master, ativo, sincronizado)
+      VALUES (?, ?, 'Admin Master', 'admin', ?, 'admin', 1, 1, 1)
     `).run(randomUUID(), estabId, hash)
     console.log('[DB] Admin master criado')
+  } else {
+    db.prepare('UPDATE operadores SET sincronizado = 1 WHERE master = 1').run()
   }
 }
 

@@ -114,7 +114,7 @@ export function getPendentes(db: Database.Database): {
   return {
     estabelecimentos: count('estabelecimentos'),
     configuracoes_preco: count('configuracoes_preco'),
-    operadores: count('operadores'),
+    operadores: (() => { try { return (db.prepare(`SELECT COUNT(*) as n FROM operadores WHERE sincronizado = 0 AND master = 0`).get() as any).n } catch { return 0 } })(),
     responsaveis: count('responsaveis'),
     criancas: count('criancas'),
     visitas: count('visitas'),
