@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react'
-import { RefreshCw, Users, LogOut, Phone } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { RefreshCw, Users, LogOut, Phone, Search } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -41,6 +42,7 @@ const corBadge = {
 export function Monitoramento() {
   const { visitasAtivas, pricingConfigs, refreshVisitas, refreshPricing } = useStore()
   const navigate = useNavigate()
+  const [filtro, setFiltro] = useState('')
 
   useEffect(() => {
     refreshVisitas()
@@ -64,6 +66,20 @@ export function Monitoramento() {
     }))
   }, [visitasAtivas])
 
+  const gruposFiltrados = useMemo(() => {
+    const q = filtro.trim().toLowerCase()
+    if (!q) return grupos
+    return grupos
+      .map(g => ({
+        ...g,
+        visitas: g.visitas.filter(v =>
+          v.crianca_nome.toLowerCase().includes(q) ||
+          (g.responsavel_nome ?? '').toLowerCase().includes(q)
+        )
+      }))
+      .filter(g => g.visitas.length > 0)
+  }, [grupos, filtro])
+
   return (
     <div className="p-6 space-y-6 pb-12">
       <div className="flex items-center justify-between">
@@ -84,8 +100,20 @@ export function Monitoramento() {
           <p className="text-sm">As visitas ativas aparecerão aqui em tempo real</p>
         </div>
       ) : (
-        <div className="space-y-8">
-          {grupos.map((grupo) => {
+        <div className="space-y-6">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome da criança ou responsável..."
+              value={filtro}
+              onChange={e => setFiltro(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="space-y-8">
+          {gruposFiltrados.length === 0 ? (
+            <p className="text-muted-foreground text-sm">Nenhum resultado para "{filtro}".</p>
+          ) : gruposFiltrados.map((grupo) => {
             const isGroup = grupo.visitas.length > 1
             const hasResp = !!grupo.responsavel_nome
 
@@ -214,6 +242,7 @@ export function Monitoramento() {
               </div>
             )
           })}
+          </div>
         </div>
       )}
     </div>

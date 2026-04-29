@@ -1207,7 +1207,7 @@ function ConfiguracoesContent() {
         open={modalSenhaAberto}
         onOpenChange={(v) => { setModalSenhaAberto(v); setSenhaInput(''); setSenhaErro(false) }}
       >
-        <DialogContent className="max-w-xs">
+        <DialogContent className="max-w-xs max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Autenticação</DialogTitle>
           </DialogHeader>
@@ -1238,7 +1238,7 @@ function ConfiguracoesContent() {
         open={modalResetAberto}
         onOpenChange={(v) => { setModalResetAberto(v); setSenhaResetInput(''); setSenhaResetErro(false) }}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-red-600">Resetar instalação</DialogTitle>
           </DialogHeader>
@@ -1285,7 +1285,7 @@ function ConfiguracoesContent() {
         open={modalUsuario.open}
         onOpenChange={(v) => { if (!v) { setModalUsuario({ open: false, editando: null }); setUserFormErro('') } }}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{modalUsuario.editando ? 'Editar usuário' : 'Novo usuário'}</DialogTitle>
           </DialogHeader>
@@ -1364,7 +1364,7 @@ function ConfiguracoesContent() {
         open={modalSenhaUser.open}
         onOpenChange={(v) => { if (!v) { setModalSenhaUser({ open: false, user: null }); setPasswordErro('') } }}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Alterar senha — {modalSenhaUser.user?.nome}</DialogTitle>
           </DialogHeader>
@@ -1418,7 +1418,7 @@ function ConfiguracoesContent() {
         open={modalRestaurarAberto}
         onOpenChange={(v) => { if (!v) setModalRestaurarAberto(false) }}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Restaurar dados da nuvem</DialogTitle>
           </DialogHeader>
@@ -1455,7 +1455,7 @@ function ConfiguracoesContent() {
         open={Boolean(confirmDeleteUser)}
         onOpenChange={(v) => { if (!v) setConfirmDeleteUser(null) }}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-red-600">Excluir usuário</DialogTitle>
           </DialogHeader>

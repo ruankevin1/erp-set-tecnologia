@@ -161,7 +161,7 @@ export function Cadastros() {
   }, [searchQuery])
 
   useEffect(() => {
-    if (novaLinkedGuardian || novaRespNome.trim().length < 2) {
+    if (novaLinkedGuardian || novaRespNome.trim().length < 1) {
       setNovaGuardianSuggestions([])
       return
     }
@@ -873,7 +873,7 @@ export function Cadastros() {
 
       {/* Dialog: confirmar exclusão de responsável */}
       <Dialog open={deleteGuardianOpen} onOpenChange={setDeleteGuardianOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Excluir Responsável</DialogTitle>
           </DialogHeader>
@@ -907,12 +907,12 @@ export function Cadastros() {
 
       {/* Dialog: adicionar criança ao responsável */}
       <Dialog open={addChildOpen} onOpenChange={setAddChildOpen}>
-        <DialogContent className="w-[480px] max-w-[480px]">
+        <DialogContent className="w-[480px] max-w-[480px] flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Adicionar Criança</DialogTitle>
           </DialogHeader>
           {addChildGuardian && (
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto flex-1 px-1 pb-4">
               <div className="px-3 py-2 bg-violet-50 rounded-md text-sm">
                 <p className="font-medium text-violet-800">Responsável: {addChildGuardian.nome}</p>
                 {addChildGuardian.telefone && <p className="text-xs text-violet-600">{addChildGuardian.telefone}</p>}
@@ -1167,7 +1167,7 @@ export function Cadastros() {
 
       {/* Dialog: confirmar exclusão */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="w-[420px] max-w-[420px]">
+        <DialogContent className="w-[420px] max-w-[420px] max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
@@ -1203,7 +1203,7 @@ export function Cadastros() {
 
       {/* Dialog: confirmar entrada rápida */}
       <Dialog open={entradaOpen} onOpenChange={setEntradaOpen}>
-        <DialogContent className="w-[440px] max-w-[440px]">
+        <DialogContent className="w-[440px] max-w-[440px] max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Confirmar Entrada</DialogTitle>
           </DialogHeader>

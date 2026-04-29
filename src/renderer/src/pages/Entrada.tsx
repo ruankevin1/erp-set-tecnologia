@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { UserPlus, ArrowRight, AlertTriangle, Users, CheckSquare } from 'lucide-react'
+import { UserPlus, ArrowRight, AlertTriangle, Users, CheckSquare, Search } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,7 +61,7 @@ export function Entrada() {
   const [caixaFechadoOpen, setCaixaFechadoOpen] = useState(false)
 
   useEffect(() => {
-    if (query.trim().length < 2) {
+    if (query.trim().length < 1) {
       setResults([])
       return
     }
@@ -82,7 +82,7 @@ export function Entrada() {
   }, [location.state])
 
   useEffect(() => {
-    if (linkedGuardian || novoResp.trim().length < 2) {
+    if (linkedGuardian || novoResp.trim().length < 1) {
       setGuardianSuggestions([])
       return
     }
@@ -95,7 +95,7 @@ export function Entrada() {
   }, [novoResp, linkedGuardian])
 
   async function buscar() {
-    if (query.trim().length < 2) return
+    if (query.trim().length < 1) return
     setLoading(true)
     const res = await window.api.children.search(estabelecimentoId, query.trim())
     setResults(res)
@@ -404,13 +404,17 @@ export function Entrada() {
           <CardTitle className="text-base">Buscar criança ou responsável</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Input
-            placeholder="Nome da criança, responsável ou telefone..."
-            value={query}
-            onChange={(e) => { setQuery(e.target.value); setSelectedIds(new Set()) }}
-            onKeyDown={(e) => e.key === 'Enter' && buscar()}
-            autoFocus
-          />
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Nome da criança, responsável ou telefone..."
+              value={query}
+              onChange={(e) => { setQuery(e.target.value); setSelectedIds(new Set()) }}
+              onKeyDown={(e) => e.key === 'Enter' && buscar()}
+              className="pl-9"
+              autoFocus
+            />
+          </div>
 
           {loading && (
             <p className="text-sm text-center text-muted-foreground py-2">Buscando...</p>
@@ -540,7 +544,7 @@ export function Entrada() {
 
       {/* Dialog: criança já está no playground */}
       <Dialog open={avisoAtivaOpen} onOpenChange={setAvisoAtivaOpen}>
-        <DialogContent className="w-[420px] max-w-[420px]">
+        <DialogContent className="w-[420px] max-w-[420px] max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-yellow-500" />
@@ -559,13 +563,13 @@ export function Entrada() {
 
       {/* Dialog: confirmar entrada individual */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-[440px] max-w-[440px]">
+        <DialogContent className="w-[440px] max-w-[440px] flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Confirmar Entrada</DialogTitle>
             <DialogDescription>Revise os dados antes de registrar a entrada.</DialogDescription>
           </DialogHeader>
           {selected && (
-            <div className="space-y-3">
+            <div className="space-y-3 overflow-y-auto flex-1 px-1 pb-4">
               <div className="bg-violet-50 border border-violet-100 rounded-lg p-4">
                 <p className="font-semibold text-lg">{selected.nome}</p>
                 {selected.data_nascimento && (
@@ -596,7 +600,7 @@ export function Entrada() {
 
       {/* Dialog: confirmar entrada em lote */}
       <Dialog open={batchDialogOpen} onOpenChange={setBatchDialogOpen}>
-        <DialogContent className="w-[480px] max-w-[480px]">
+        <DialogContent className="w-[480px] max-w-[480px] flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Confirmar Entrada em Grupo</DialogTitle>
             <DialogDescription>
@@ -605,7 +609,7 @@ export function Entrada() {
                 : 'Cada criança receberá um ticket individual.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-3 overflow-y-auto flex-1 px-1 pb-4">
             <div className="rounded-lg border divide-y">
               {criancasSelecionadas.map(c => (
                 <div key={c.id} className="flex items-center justify-between px-4 py-2.5">
@@ -815,7 +819,7 @@ export function Entrada() {
 
       {/* Dialog: CPF duplicado */}
       <Dialog open={cpfDupOpen} onOpenChange={setCpfDupOpen}>
-        <DialogContent className="w-[440px] max-w-[440px]">
+        <DialogContent className="w-[440px] max-w-[440px] max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>CPF já cadastrado</DialogTitle>
           </DialogHeader>

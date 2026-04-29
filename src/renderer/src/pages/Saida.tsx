@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Printer, CheckCircle, Users, Check, Phone, Tag } from 'lucide-react'
+import { Printer, CheckCircle, Users, Check, Phone, Tag, Search } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,6 +54,7 @@ export function Saida() {
 
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewContent, setPreviewContent] = useState('')
+  const [filtro, setFiltro] = useState('')
 
   const grupos = useMemo((): GrupoVisita[] => {
     const map = new Map<string | null, Visita[]>()
@@ -69,6 +70,20 @@ export function Saida() {
       visitas
     }))
   }, [visitasAtivas])
+
+  const gruposFiltrados = useMemo(() => {
+    const q = filtro.trim().toLowerCase()
+    if (!q) return grupos
+    return grupos
+      .map(g => ({
+        ...g,
+        visitas: g.visitas.filter(v =>
+          v.crianca_nome.toLowerCase().includes(q) ||
+          (g.responsavel_nome ?? '').toLowerCase().includes(q)
+        )
+      }))
+      .filter(g => g.visitas.length > 0)
+  }, [grupos, filtro])
 
   useEffect(() => {
     const state = location.state as any
@@ -290,8 +305,20 @@ export function Saida() {
           <p className="text-lg font-medium">Nenhuma criança para dar saída</p>
         </div>
       ) : (
-        <div className="space-y-8">
-          {grupos.map((grupo) => {
+        <div className="space-y-6">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome da criança ou responsável..."
+              value={filtro}
+              onChange={e => setFiltro(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="space-y-8">
+          {gruposFiltrados.length === 0 ? (
+            <p className="text-muted-foreground text-sm">Nenhum resultado para "{filtro}".</p>
+          ) : gruposFiltrados.map((grupo) => {
             const isGroup = grupo.visitas.length > 1
             return (
               <div key={grupo.responsavel_id ?? '__no_resp'} className="space-y-3">
@@ -383,12 +410,13 @@ export function Saida() {
               </div>
             )
           })}
+          </div>
         </div>
       )}
 
       {/* Dialog: saída individual */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) fecharDialog() }}>
-        <DialogContent className="w-[440px] max-w-[440px]">
+        <DialogContent className="w-[440px] max-w-[440px] flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{checkout ? 'Saída Registrada' : 'Confirmar Saída'}</DialogTitle>
             <DialogDescription>
@@ -397,7 +425,7 @@ export function Saida() {
           </DialogHeader>
 
           {!checkout && selecionada && (
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto flex-1 px-1 pb-4">
               <div className="bg-slate-50 rounded-lg p-4 border">
                 <p className="font-semibold text-base">{selecionada.crianca_nome}</p>
                 {selecionada.responsavel_nome && (
@@ -539,7 +567,7 @@ export function Saida() {
           )}
 
           {checkout && selecionada && (
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto flex-1 px-1 pb-4">
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                 <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
                 <p className="font-semibold text-lg text-green-800">{selecionada.crianca_nome}</p>
@@ -604,7 +632,7 @@ export function Saida() {
           </DialogHeader>
 
           {!grupoCheckout && grupoSelecionado && (
-            <div className="space-y-4 overflow-y-auto flex-1 px-1">
+            <div className="space-y-4 overflow-y-auto flex-1 px-1 pb-4">
               {/* Cabeçalho do responsável */}
               {grupoSelecionado.responsavel_nome && (
                 <div className="flex items-center gap-3 px-4 py-3 bg-violet-50 border border-violet-100 rounded-lg">

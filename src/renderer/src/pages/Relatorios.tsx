@@ -327,8 +327,8 @@ export function Relatorios() {
                           <td className="py-2.5">{v.saida_em ? formatDateTime(v.saida_em) : '-'}</td>
                           <td className="py-2.5">{formatDuracao(v.entrada_em, v.saida_em)}</td>
                           <td className="py-2.5 text-right text-rose-600">
-                            {v.desconto_valor && v.desconto_valor > 0
-                              ? <span title={v.motivo_desconto}>-{formatCurrency(v.desconto_valor)}</span>
+                            {v.desconto_valor && v.desconto_valor > 0 && v.valor_original != null
+                              ? <span title={v.motivo_desconto}>-{formatCurrency(v.valor_original - (v.valor_total ?? 0))}</span>
                               : <span className="text-muted-foreground">—</span>
                             }
                           </td>
@@ -342,7 +342,7 @@ export function Relatorios() {
                       <tr className="border-t font-semibold">
                         <td colSpan={5} className="py-2.5">Total</td>
                         <td className="py-2.5 text-right text-rose-600">
-                          -{formatCurrency(visitas.reduce((s, v) => s + (v.desconto_valor ?? 0), 0))}
+                          -{formatCurrency(visitas.reduce((s, v) => s + (v.desconto_valor && v.valor_original != null ? (v.valor_original - (v.valor_total ?? 0)) : 0), 0))}
                         </td>
                         <td className="py-2.5 text-right text-green-700">{formatCurrency(totalValor)}</td>
                       </tr>

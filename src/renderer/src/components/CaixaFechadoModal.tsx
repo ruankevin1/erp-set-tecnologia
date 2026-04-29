@@ -10,7 +10,7 @@ interface Props {
 export function CaixaFechadoModal({ open, onClose }: Props) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-xs text-center px-8 py-8">
+      <DialogContent className="max-w-xs text-center px-8 py-8 max-h-[90vh] overflow-y-auto">
         <div className="flex flex-col items-center gap-5">
           <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center">
             <Lock className="w-8 h-8 text-amber-500" />

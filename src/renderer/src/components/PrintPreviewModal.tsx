@@ -12,14 +12,14 @@ interface PrintPreviewModalProps {
 export function PrintPreviewModal({ open, onClose, content, title = 'Preview do Ticket' }: PrintPreviewModalProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="w-auto max-w-[90vw]">
+      <DialogContent className="w-auto max-w-[90vw] flex flex-col max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Printer className="w-5 h-5" />
             {title}
           </DialogTitle>
         </DialogHeader>
-        <div className="py-2 overflow-y-auto">
+        <div className="py-2 overflow-y-auto flex-1 pb-2">
           <div
             className="bg-white text-black border border-gray-200 shadow-md rounded px-3 py-3"
             style={{

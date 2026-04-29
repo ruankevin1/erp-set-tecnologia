@@ -37,7 +37,7 @@ export function registerCashHandlers(ipcMain: IpcMain, db: Database.Database): v
         COUNT(*) as total_entradas,
         COALESCE(SUM(valor_total), 0) as total_valor,
         COALESCE(SUM(COALESCE(valor_original, valor_total)), 0) as total_bruto,
-        COALESCE(SUM(COALESCE(desconto_valor, 0)), 0) as total_descontos,
+        COALESCE(SUM(CASE WHEN desconto_valor > 0 THEN COALESCE(valor_original, valor_total) - valor_total ELSE 0 END), 0) as total_descontos,
         COALESCE(AVG((julianday(saida_em) - julianday(entrada_em)) * 24 * 60), 0) as media_minutos
       FROM visitas
       WHERE status = 'finalizada'
@@ -59,7 +59,7 @@ export function registerCashHandlers(ipcMain: IpcMain, db: Database.Database): v
     const descontosPorMotivo = db.prepare(`
       SELECT
         COALESCE(motivo_desconto, 'Outros') as motivo,
-        COALESCE(SUM(desconto_valor), 0) as total
+        COALESCE(SUM(COALESCE(valor_original, valor_total) - valor_total), 0) as total
       FROM visitas
       WHERE status = 'finalizada'
         AND estabelecimento_id = ?
@@ -100,7 +100,7 @@ export function registerCashHandlers(ipcMain: IpcMain, db: Database.Database): v
         COUNT(*) as total_entradas,
         COALESCE(SUM(valor_total), 0) as total_valor,
         COALESCE(SUM(COALESCE(valor_original, valor_total)), 0) as total_bruto,
-        COALESCE(SUM(COALESCE(desconto_valor, 0)), 0) as total_descontos,
+        COALESCE(SUM(CASE WHEN desconto_valor > 0 THEN COALESCE(valor_original, valor_total) - valor_total ELSE 0 END), 0) as total_descontos,
         COALESCE(AVG((julianday(saida_em) - julianday(entrada_em)) * 24 * 60), 0) as media_minutos
       FROM visitas
       WHERE status = 'finalizada'
@@ -122,7 +122,7 @@ export function registerCashHandlers(ipcMain: IpcMain, db: Database.Database): v
     const descontosPorMotivo = db.prepare(`
       SELECT
         COALESCE(motivo_desconto, 'Outros') as motivo,
-        COALESCE(SUM(desconto_valor), 0) as total
+        COALESCE(SUM(COALESCE(valor_original, valor_total) - valor_total), 0) as total
       FROM visitas
       WHERE status = 'finalizada'
         AND estabelecimento_id = ?

@@ -6,7 +6,6 @@ import { UpdateBanner } from './UpdateBanner'
 import { useStore } from '@/store/useStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useToast } from '@/hooks/useToast'
-import setIcon from '@/assets/icon.png'
 
 export function Layout() {
   const { setUpdateAvailable, setUpdateDownloaded, setDownloadProgress, setNomeEstabelecimento } = useStore()
@@ -64,11 +63,6 @@ export function Layout() {
         </div>
       </main>
       <Toaster />
-      <img
-        src={setIcon}
-        alt="Set Tecnologia"
-        className="fixed bottom-4 right-4 w-44 h-44 rounded-full object-cover opacity-60 pointer-events-none select-none"
-      />
     </div>
   )
 }

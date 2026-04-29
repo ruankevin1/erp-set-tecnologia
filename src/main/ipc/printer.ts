@@ -32,8 +32,8 @@ interface TicketSettings {
   exibirTabela: boolean
 }
 
-const W = 42
-const FIXED_FOOTER = 'Sistema fornecido por Set Tecnologia'
+const W = 48
+const FIXED_FOOTER = 'Desenvolvido por Set Tecnologia'
 
 function center(s: string): string {
   const t = s.slice(0, W)
@@ -43,6 +43,13 @@ function center(s: string): string {
 
 function hr(): string { return '-'.repeat(W) }
 function HR(): string { return '='.repeat(W) }
+
+function formatPhone(raw: string): string {
+  const d = raw.replace(/\D/g, '')
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d[2]} ${d.slice(3, 7)}-${d.slice(7)}`
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  return raw
+}
 function brl(v: number): string { return `R$ ${v.toFixed(2).replace('.', ',')}` }
 function brlPad(v: number): string { return `R$ ${v.toFixed(2).replace('.', ',').padStart(6)}` }
 
@@ -94,8 +101,8 @@ function getSettings(db: Database.Database): TicketSettings {
   return {
     nome: get('estabelecimento_nome', 'PLAYKIDS'),
     unidade: get('ticket_unidade', ''),
-    tel1: get('estabelecimento_telefone1', ''),
-    tel2: get('estabelecimento_telefone2', ''),
+    tel1: formatPhone(get('estabelecimento_telefone1', '')),
+    tel2: formatPhone(get('estabelecimento_telefone2', '')),
     rodape1: get('rodape_ticket', 'Agradecemos sua visita!'),
     rodape2: get('ticket_rodape2', ''),
     exibirCodigo: get('ticket_exibir_codigo', 'true') !== 'false',

@@ -328,11 +328,11 @@ export function Dashboard() {
 
       {/* Modal Abertura de Caixa */}
       <Dialog open={modalAbertura} onOpenChange={(o) => { if (!abrindo) setModalAbertura(o) }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Abertura de Caixa</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 overflow-y-auto flex-1 px-1 pb-4">
             <div className="space-y-2">
               <Label>Operador</Label>
               <Select value={operadorId} onValueChange={setOperadorId}>
@@ -370,12 +370,12 @@ export function Dashboard() {
 
       {/* Modal Fechamento de Caixa */}
       <Dialog open={modalFechamento} onOpenChange={(o) => { if (!fechando) setModalFechamento(o) }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Fechamento de Caixa</DialogTitle>
           </DialogHeader>
           {caixaStats && (
-            <div className="space-y-3 text-sm py-1 overflow-y-auto flex-1 pr-1">
+            <div className="space-y-3 text-sm py-1 overflow-y-auto flex-1 px-1 pb-4">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Operador</span>
                 <span className="font-medium">{caixaStats.operador_nome || '—'}</span>
