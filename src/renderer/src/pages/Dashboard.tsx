@@ -307,8 +307,8 @@ export function Dashboard() {
             <CardTitle className="text-base">Crianças no playground agora</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {visitasAtivas.slice(0, 8).map((v) => (
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {visitasAtivas.map((v) => (
                 <div key={v.id} className="flex items-center justify-between py-1.5 border-b last:border-0">
                   <div>
                     <p className="font-medium text-sm">{v.crianca_nome}</p>

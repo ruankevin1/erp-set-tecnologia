@@ -14,6 +14,8 @@ const TABLES = [
   'logs_auditoria'
 ] as const
 
+const SOFT_DELETE_TABLES = new Set(['responsaveis', 'criancas'])
+
 let _db: Database.Database | null = null
 let _window: BrowserWindow | null = null
 let _isSyncing = false
@@ -141,10 +143,32 @@ export async function pushToSupabase(
         db.prepare('UPDATE estabelecimentos SET configuracoes = ?, sincronizado = 0')
           .run(JSON.stringify(settings))
       }
-      const rows = db.prepare(`SELECT * FROM ${table} WHERE sincronizado = 0`).all() as any[]
+
+      // Soft-delete tables: push real DELETEs to Supabase before upserting
+      if (SOFT_DELETE_TABLES.has(table)) {
+        const deleted = db.prepare(
+          `SELECT id FROM ${table} WHERE deletado_em IS NOT NULL AND sincronizado = 0`
+        ).all() as { id: string }[]
+        for (const { id } of deleted) {
+          const delRes = await fetch(`${supabaseUrl}/rest/v1/${table}?id=eq.${id}`, {
+            method: 'DELETE',
+            headers: { apikey: apiKey, Authorization: `Bearer ${supabaseKey}` }
+          })
+          if (delRes.ok || delRes.status === 404) {
+            db.prepare(`UPDATE ${table} SET sincronizado = 1 WHERE id = ?`).run(id)
+            pushed[pushedKey] = (pushed[pushedKey] ?? 0) + 1
+          }
+        }
+      }
+
+      const activeQuery = SOFT_DELETE_TABLES.has(table)
+        ? `SELECT * FROM ${table} WHERE sincronizado = 0 AND deletado_em IS NULL`
+        : `SELECT * FROM ${table} WHERE sincronizado = 0`
+      const rows = db.prepare(activeQuery).all() as any[]
       if (rows.length === 0) continue
 
-      const clean = rows.map(({ sincronizado: _s, senha_hash: _h, ...rest }) => rest)
+      // Strip internal fields before sending to Supabase
+      const clean = rows.map(({ sincronizado: _s, senha_hash: _h, deletado_em: _d, ...rest }) => rest)
       console.log(`[sync] ${table}: ${rows.length} registro(s)`)
 
       const res = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
@@ -169,7 +193,7 @@ export async function pushToSupabase(
         for (const id of ids) updateStmt.run(id)
       })(rows.map((r) => r.id))
 
-      pushed[pushedKey] = rows.length
+      pushed[pushedKey] = (pushed[pushedKey] ?? 0) + rows.length
     } catch (err: any) {
       console.error(`[sync] ERRO ${err.message}`)
       errors.push(err.message)

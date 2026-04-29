@@ -27,6 +27,7 @@ interface AppState {
   setIsOnline: (v: boolean) => void
   setPricingConfigs: (configs: ConfiguracaoPreco[]) => void
   setSimulacaoImpressao: (v: boolean) => void
+  setEstabelecimentoId: (id: string) => void
   setNomeEstabelecimento: (nome: string) => void
   setLoading: (loading: boolean) => void
   setUpdateAvailable: (version: string) => void
@@ -66,6 +67,7 @@ export const useStore = create<AppState>((set, get) => ({
     localStorage.setItem('simulacaoImpressao', String(v))
     set({ simulacaoImpressao: v })
   },
+  setEstabelecimentoId: (id) => set({ estabelecimentoId: id }),
   setNomeEstabelecimento: (nome) => set({ nomeEstabelecimento: nome }),
   setLoading: (loading) => set({ loading }),
   setUpdateAvailable: (version) => set({ updateAvailable: true, updateVersion: version }),

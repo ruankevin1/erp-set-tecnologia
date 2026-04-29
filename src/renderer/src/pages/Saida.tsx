@@ -593,7 +593,7 @@ export function Saida() {
 
       {/* Dialog: saída em grupo */}
       <Dialog open={grupoDialogOpen} onOpenChange={(open) => { if (!open) fecharGrupoDialog() }}>
-        <DialogContent className="w-[560px] max-w-[560px]">
+        <DialogContent className="w-[560px] max-w-[560px] flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{grupoCheckout ? 'Saída em Grupo Registrada' : 'Confirmar Saída em Grupo'}</DialogTitle>
             <DialogDescription>
@@ -604,7 +604,7 @@ export function Saida() {
           </DialogHeader>
 
           {!grupoCheckout && grupoSelecionado && (
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto flex-1 pr-0.5">
               {/* Cabeçalho do responsável */}
               {grupoSelecionado.responsavel_nome && (
                 <div className="flex items-center gap-3 px-4 py-3 bg-violet-50 border border-violet-100 rounded-lg">
@@ -622,7 +622,7 @@ export function Saida() {
               )}
 
               {/* Lista de crianças com checkboxes */}
-              <div className="rounded-lg border divide-y">
+              <div className="rounded-lg border divide-y max-h-[35vh] overflow-y-auto">
                 {grupoSelecionado.visitas.map((v) => {
                   const preview = grupoPreviews[v.id]
                   const checked = grupoSelecionados.has(v.id)

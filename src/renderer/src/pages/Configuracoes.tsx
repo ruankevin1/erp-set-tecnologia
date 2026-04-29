@@ -1431,6 +1431,13 @@ function ConfiguracoesContent() {
                 Dados que nunca foram sincronizados <strong>não podem ser recuperados</strong>.
               </span>
             </div>
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-md px-3 py-2 text-xs text-red-800">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                <strong>Atenção:</strong> registros <strong>deletados localmente</strong> voltam da nuvem, pois exclusões não são sincronizadas.
+                Após restaurar, verifique e remova manualmente os cadastros indesejados.
+              </span>
+            </div>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" size="sm" onClick={() => setModalRestaurarAberto(false)}>
                 Cancelar

@@ -207,6 +207,10 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
       }
       const configs = await res.json()
 
+      // Garante que o estabelecimento existe localmente e salva o ID nas settings
+      db.prepare(`INSERT OR IGNORE INTO estabelecimentos (id, nome, ativo) VALUES (?, 'PlayKids', 1)`).run(estabelecimentoId)
+      db.prepare(`INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('estabelecimento_id', ?)`).run(estabelecimentoId)
+
       const insert = db.prepare(`
         INSERT OR REPLACE INTO configuracoes_preco
           (id, estabelecimento_id, nome, idade_min, idade_max,

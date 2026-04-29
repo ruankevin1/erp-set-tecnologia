@@ -13,7 +13,7 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
       SELECT c.*, r.nome as responsavel_nome, r.telefone as responsavel_telefone
       FROM criancas c
       LEFT JOIN responsaveis r ON c.responsavel_id = r.id
-      WHERE c.estabelecimento_id = ?
+      WHERE c.estabelecimento_id = ? AND c.deletado_em IS NULL
       ORDER BY c.nome
     `).all(estabelecimentoId)
   })
@@ -25,7 +25,7 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
       FROM criancas c
       LEFT JOIN responsaveis r ON c.responsavel_id = r.id
       LEFT JOIN visitas v ON c.id = v.crianca_id
-      WHERE c.estabelecimento_id = ?
+      WHERE c.estabelecimento_id = ? AND c.deletado_em IS NULL
         AND (normalize_text(c.nome) LIKE ? OR normalize_text(r.nome) LIKE ? OR r.telefone LIKE ?)
       GROUP BY c.id
       ORDER BY c.nome
@@ -49,7 +49,7 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
       FROM criancas c
       LEFT JOIN responsaveis r ON c.responsavel_id = r.id
       LEFT JOIN visitas v ON c.id = v.crianca_id
-      WHERE c.estabelecimento_id = ?
+      WHERE c.estabelecimento_id = ? AND c.deletado_em IS NULL
     `
     if (normQ) {
       return db.prepare(`${base} AND (normalize_text(c.nome) LIKE ? OR normalize_text(r.nome) LIKE ? OR r.telefone LIKE ? OR r.cpf LIKE ? OR c.cpf LIKE ?) GROUP BY c.id ORDER BY c.nome`)
@@ -142,34 +142,32 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
 
     const child = db.prepare(`SELECT responsavel_id FROM criancas WHERE id = ?`).get(id) as any
 
-    // FK off para manter histórico de visitas intacto
-    db.pragma('foreign_keys = OFF')
-    try {
-      db.prepare(`DELETE FROM criancas WHERE id = ?`).run(id)
+    db.prepare(`
+      UPDATE criancas SET deletado_em = datetime('now'), sincronizado = 0 WHERE id = ?
+    `).run(id)
 
-      if (child?.responsavel_id) {
-        const outrasFilhos = db.prepare(
-          `SELECT COUNT(*) as count FROM criancas WHERE responsavel_id = ?`
-        ).get(child.responsavel_id) as any
-        if (outrasFilhos.count === 0) {
-          db.prepare(`DELETE FROM responsaveis WHERE id = ?`).run(child.responsavel_id)
-        }
+    if (child?.responsavel_id) {
+      const outrasFilhos = db.prepare(
+        `SELECT COUNT(*) as count FROM criancas WHERE responsavel_id = ? AND deletado_em IS NULL`
+      ).get(child.responsavel_id) as any
+      if (outrasFilhos.count === 0) {
+        db.prepare(`
+          UPDATE responsaveis SET deletado_em = datetime('now'), sincronizado = 0 WHERE id = ?
+        `).run(child.responsavel_id)
       }
-    } finally {
-      db.pragma('foreign_keys = ON')
     }
+
     triggerSync()
     return { success: true }
   })
 
   ipcMain.handle('guardians:delete', (_event, id: string) => {
-    db.pragma('foreign_keys = OFF')
-    try {
-      db.prepare(`DELETE FROM criancas WHERE responsavel_id = ?`).run(id)
-      db.prepare(`DELETE FROM responsaveis WHERE id = ?`).run(id)
-    } finally {
-      db.pragma('foreign_keys = ON')
-    }
+    db.prepare(`
+      UPDATE criancas SET deletado_em = datetime('now'), sincronizado = 0 WHERE responsavel_id = ? AND deletado_em IS NULL
+    `).run(id)
+    db.prepare(`
+      UPDATE responsaveis SET deletado_em = datetime('now'), sincronizado = 0 WHERE id = ?
+    `).run(id)
     triggerSync()
     return { success: true }
   })
@@ -177,7 +175,7 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
   // Responsáveis
   ipcMain.handle('guardians:list', (_event, estabelecimentoId: string) => {
     return db.prepare(`
-      SELECT * FROM responsaveis WHERE estabelecimento_id = ? ORDER BY nome
+      SELECT * FROM responsaveis WHERE estabelecimento_id = ? AND deletado_em IS NULL ORDER BY nome
     `).all(estabelecimentoId)
   })
 
@@ -215,7 +213,7 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
 
   ipcMain.handle('guardians:find-by-cpf', (_event, { estabelecimentoId, cpf }: { estabelecimentoId: string; cpf: string }) => {
     return db.prepare(`
-      SELECT id, nome, telefone FROM responsaveis WHERE estabelecimento_id = ? AND cpf = ? LIMIT 1
+      SELECT id, nome, telefone FROM responsaveis WHERE estabelecimento_id = ? AND cpf = ? AND deletado_em IS NULL LIMIT 1
     `).get(estabelecimentoId, cpf)
   })
 
@@ -224,8 +222,9 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
       SELECT r.id, r.nome, r.cpf, r.telefone, r.email,
         COUNT(c.id) as total_criancas
       FROM responsaveis r
-      LEFT JOIN criancas c ON c.responsavel_id = r.id
-      WHERE r.estabelecimento_id = ? AND (normalize_text(r.nome) LIKE ? OR r.cpf LIKE ? OR r.telefone LIKE ?)
+      LEFT JOIN criancas c ON c.responsavel_id = r.id AND c.deletado_em IS NULL
+      WHERE r.estabelecimento_id = ? AND r.deletado_em IS NULL
+        AND (normalize_text(r.nome) LIKE ? OR r.cpf LIKE ? OR r.telefone LIKE ?)
       GROUP BY r.id
       ORDER BY r.nome
       LIMIT 10
@@ -243,7 +242,7 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
         ) THEN 1 ELSE 0 END as visita_ativa
       FROM criancas c
       LEFT JOIN visitas v ON v.crianca_id = c.id
-      WHERE c.responsavel_id = ?
+      WHERE c.responsavel_id = ? AND c.deletado_em IS NULL
       GROUP BY c.id
       ORDER BY c.nome
     `).all(guardianId)
@@ -259,7 +258,7 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
       FROM responsaveis r
       LEFT JOIN criancas c ON c.responsavel_id = r.id
       LEFT JOIN visitas v ON v.crianca_id = c.id
-      WHERE r.estabelecimento_id = ?
+      WHERE r.estabelecimento_id = ? AND r.deletado_em IS NULL
     `
     const q = query && query.trim().length >= 1 ? `%${query.trim()}%` : null
     if (q) {

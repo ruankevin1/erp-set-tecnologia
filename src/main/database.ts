@@ -187,6 +187,7 @@ function runMigrations(db: Database.Database): void {
   migrateFechamentosCaixaColunas(db)
   migrateOperadoresColunas(db)
   migrateEstabelecimentosColunas(db)
+  migrateSoftDelete(db)
   ensureConfiguracoesSistema(db)
   ensureEstabelecimento(db)
   ensureDefaultPricingConfig(db)
@@ -316,6 +317,18 @@ function ensureAdminMaster(db: Database.Database): void {
     `).run(randomUUID(), estabId, hash)
     console.log('[DB] Admin master criado')
   }
+}
+
+function migrateSoftDelete(db: Database.Database): void {
+  const respCols = new Set(
+    (db.prepare('PRAGMA table_info(responsaveis)').all() as { name: string }[]).map(r => r.name)
+  )
+  if (!respCols.has('deletado_em')) db.exec('ALTER TABLE responsaveis ADD COLUMN deletado_em TEXT')
+
+  const criancaCols = new Set(
+    (db.prepare('PRAGMA table_info(criancas)').all() as { name: string }[]).map(r => r.name)
+  )
+  if (!criancaCols.has('deletado_em')) db.exec('ALTER TABLE criancas ADD COLUMN deletado_em TEXT')
 }
 
 function migrateEstabelecimentosColunas(db: Database.Database): void {

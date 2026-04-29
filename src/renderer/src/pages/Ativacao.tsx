@@ -4,10 +4,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { CheckCircle, AlertTriangle, RefreshCw } from 'lucide-react'
-import { ESTABELECIMENTO_ID } from '@/lib/supabase'
 
 interface Props {
-  onAtivado: () => void
+  onAtivado: (estabelecimentoId: string) => void
+}
+
+function decodeJwt(jwt: string): Record<string, any> | null {
+  try { return JSON.parse(atob(jwt.split('.')[1])) } catch { return null }
 }
 
 export function Ativacao({ onAtivado }: Props) {
@@ -18,25 +21,35 @@ export function Ativacao({ onAtivado }: Props) {
 
   async function ativar() {
     const chaveT = chave.trim()
-    if (!chaveT) {
-      setErro('Digite a chave de acesso.')
+    if (!chaveT) { setErro('Digite a chave de acesso.'); return }
+
+    const payload = decodeJwt(chaveT)
+    if (!payload) { setErro('Formato de chave inválido.'); return }
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      setErro('Chave de acesso expirada. Solicite uma nova chave à Set Tecnologia.')
       return
     }
+    const estabId = payload.estabelecimento_id as string | undefined
+    if (!estabId) { setErro('Chave inválida: estabelecimento não identificado.'); return }
+
     setLoading(true)
     setErro('')
     try {
-      const res = await window.api.sync.fetchConfig(chaveT, ESTABELECIMENTO_ID)
+      const res = await window.api.sync.fetchConfig(chaveT, estabId)
       if (!res.success) {
-        setErro('Chave de acesso inválida. Verifique com a Set Tecnologia.')
+        const detail = (res as any).error ? ` (${(res as any).error})` : ''
+        setErro(`Chave de acesso inválida.${detail} Verifique com a Set Tecnologia.`)
         setLoading(false)
         return
       }
       await window.api.settings.set('supabase_key', chaveT)
       await window.api.settings.set('app_ativado', '1')
+      await window.api.settings.set('estabelecimento_id', estabId)
+      if (payload.nome) await window.api.settings.set('estabelecimento_nome', String(payload.nome))
       setSucesso(true)
-      setTimeout(() => onAtivado(), 1200)
-    } catch {
-      setErro('Chave de acesso inválida. Verifique com a Set Tecnologia.')
+      setTimeout(() => onAtivado(estabId), 1200)
+    } catch (err: any) {
+      setErro(`Erro ao verificar chave: ${err?.message ?? 'falha de conexão'}. Verifique a internet.`)
       setLoading(false)
     }
   }
@@ -44,7 +57,6 @@ export function Ativacao({ onAtivado }: Props) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-violet-600 rounded-2xl mb-4 shadow-xl">
             <span className="text-white text-2xl font-bold tracking-tight">S</span>
@@ -57,7 +69,6 @@ export function Ativacao({ onAtivado }: Props) {
           </p>
         </div>
 
-        {/* Card */}
         <Card className="border-0 shadow-2xl bg-white">
           <CardContent className="pt-6 pb-6 space-y-4">
             <div className="space-y-1.5">
@@ -91,18 +102,12 @@ export function Ativacao({ onAtivado }: Props) {
               className="w-full bg-violet-600 hover:bg-violet-700"
             >
               {loading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Verificando...
-                </>
-              ) : (
-                'Ativar sistema'
-              )}
+                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Verificando...</>
+              ) : 'Ativar sistema'}
             </Button>
           </CardContent>
         </Card>
 
-        {/* Rodapé */}
         <p className="text-center text-slate-500 text-xs mt-6">
           Sistema fornecido por Set Tecnologia
         </p>

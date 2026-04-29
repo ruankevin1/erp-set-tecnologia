@@ -12,19 +12,31 @@ import { Ativacao } from './pages/Ativacao'
 import { Login } from './pages/Login'
 import { useStore } from './store/useStore'
 import { useAuthStore, type Usuario } from './store/useAuthStore'
+import { ESTABELECIMENTO_ID } from './lib/supabase'
+
+function decodeJwt(jwt: string): Record<string, any> | null {
+  try { return JSON.parse(atob(jwt.split('.')[1])) } catch { return null }
+}
 
 export default function App() {
-  const { refreshVisitas, refreshCaixa, refreshPricing, setSyncStatus, setIsSyncing, setIsOnline } = useStore()
+  const { refreshVisitas, refreshCaixa, refreshPricing, setSyncStatus, setIsSyncing, setIsOnline, setEstabelecimentoId } = useStore()
   const { usuario, setUsuario } = useAuthStore()
   const [ativado, setAtivado] = useState<boolean | null>(null)
 
   useEffect(() => {
     window.api.settings.get('app_ativado').then(async (val) => {
       if (val === '1') {
+        const savedId = await window.api.settings.get('estabelecimento_id')
+        if (savedId) setEstabelecimentoId(savedId)
         setAtivado(true)
       } else if (import.meta.env.DEV && import.meta.env.VITE_DEV_JWT_TOKEN) {
-        await window.api.settings.set('supabase_key', import.meta.env.VITE_DEV_JWT_TOKEN as string)
+        const devToken = import.meta.env.VITE_DEV_JWT_TOKEN as string
+        const payload = decodeJwt(devToken)
+        const estabId = payload?.estabelecimento_id ?? ESTABELECIMENTO_ID
+        await window.api.settings.set('supabase_key', devToken)
         await window.api.settings.set('app_ativado', '1')
+        await window.api.settings.set('estabelecimento_id', estabId)
+        setEstabelecimentoId(estabId)
         setAtivado(true)
       } else {
         setAtivado(false)
@@ -62,7 +74,7 @@ export default function App() {
 
   if (ativado === null) return null
 
-  if (!ativado) return <Ativacao onAtivado={() => setAtivado(true)} />
+  if (!ativado) return <Ativacao onAtivado={(estabId) => { setEstabelecimentoId(estabId); setAtivado(true) }} />
 
   if (!usuario) return <Login onLogin={(u: Usuario) => setUsuario(u)} />
 
