@@ -52,6 +52,8 @@ function formatPhone(raw: string): string {
 }
 function brl(v: number): string { return `R$ ${v.toFixed(2).replace('.', ',')}` }
 function brlPad(v: number): string { return `R$ ${v.toFixed(2).replace('.', ',').padStart(6)}` }
+// SQLite datetime('now') stores UTC without timezone marker; ensure correct local-time display
+function parseUtcDate(s: string): Date { return new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z') }
 
 function addMinStr(base: Date, minutes: number): string {
   const d = new Date(base.getTime() + minutes * 60000)
@@ -234,6 +236,7 @@ function buildSaidaText(
   const hasDesconto = data.descontoValor && data.descontoValor > 0
 
   const breakdown = data.configuracao ? buildBreakdown(data.minutos, data.configuracao) : []
+  const descontoMonetario = (data.valorOriginal ?? data.valorTotal) - data.valorTotal
 
   const lines: string[] = [
     HR(),
@@ -255,7 +258,7 @@ function buildSaidaText(
     ...(breakdown.length ? [hr()] : []),
     ...(hasDesconto ? [
       col('VALOR ORIGINAL:', brl(data.valorOriginal ?? data.valorTotal)),
-      col('DESCONTO:',       `-${brl(data.descontoValor!)}`),
+      col('DESCONTO:',       `-${brl(descontoMonetario)}`),
       hr(),
       center(`TOTAL PAGO ${brl(data.valorTotal)}`),
       ...(data.motivoDesconto ? [`Motivo: ${data.motivoDesconto}`.slice(0, W)] : []),
@@ -402,9 +405,10 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
         printer.drawLine()
       }
       if (hasDesconto) {
+        const descontoMon = (data.valorOriginal ?? data.valorTotal) - data.valorTotal
         printer.alignLeft()
         printer.println(col('VALOR ORIGINAL:', brl(data.valorOriginal ?? data.valorTotal)))
-        printer.println(col('DESCONTO:', `-${brl(data.descontoValor!)}`))
+        printer.println(col('DESCONTO:', `-${brl(descontoMon)}`))
         printer.drawLine()
       }
       printer.bold(true)
@@ -526,7 +530,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     abertura_em: string
   }) => {
     const s = getSettings(db)
-    const dt = new Date(data.abertura_em)
+    const dt = parseUtcDate(data.abertura_em)
     const dataStr = dt.toLocaleDateString('pt-BR')
     const hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
@@ -574,11 +578,12 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     por_forma: Array<{ forma: string; total: number }>
     suprimento_inicial: number
     total_descontos?: number
+    total_bruto?: number
     descontos_por_motivo?: Array<{ motivo: string; total: number }>
   }) => {
     const s = getSettings(db)
-    const abertura = new Date(data.abertura_em)
-    const fechamento = new Date(data.fechamento_em)
+    const abertura = parseUtcDate(data.abertura_em)
+    const fechamento = parseUtcDate(data.fechamento_em)
     const dataStr = fechamento.toLocaleDateString('pt-BR')
     const horaFechamento = fechamento.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     const horaAbertura = abertura.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -592,7 +597,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     for (const [k, v] of Object.entries(formaMap)) {
       if (k.includes('dinheiro')) totalDinheiro += v
     }
-    const totalBruto = data.por_forma.reduce((acc, f) => acc + f.total, 0)
+    const totalBruto = data.total_bruto ?? data.por_forma.reduce((acc, f) => acc + f.total, 0)
     const totalDescontos = data.total_descontos ?? 0
     const totalLiquido = totalBruto - totalDescontos
     const totalEsperado = data.suprimento_inicial + totalDinheiro

@@ -9,16 +9,24 @@ export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 }
 
+// SQLite datetime('now') stores UTC as "YYYY-MM-DD HH:MM:SS" (space, no Z); parse as UTC
+function parseDate(date: string | Date): Date {
+  if (typeof date === 'string' && date.includes(' ') && !date.includes('Z') && !date.includes('+')) {
+    return new Date(date.replace(' ', 'T') + 'Z')
+  }
+  return new Date(date)
+}
+
 export function formatTime(date: string | Date): string {
-  return new Date(date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return parseDate(date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
 export function formatDate(date: string | Date): string {
-  return new Date(date).toLocaleDateString('pt-BR')
+  return parseDate(date).toLocaleDateString('pt-BR')
 }
 
 export function formatDateTime(date: string | Date): string {
-  return new Date(date).toLocaleString('pt-BR', {
+  return parseDate(date).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit'
   })

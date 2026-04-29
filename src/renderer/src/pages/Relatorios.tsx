@@ -176,6 +176,7 @@ export function Relatorios() {
         por_forma: stats.por_forma,
         suprimento_inicial: caixa.suprimento_inicial ?? 0,
         total_descontos: stats.total_descontos,
+        total_bruto: stats.total_bruto,
         descontos_por_motivo: stats.descontos_por_motivo,
       })
       if (simulacaoImpressao || !printResult.success) {

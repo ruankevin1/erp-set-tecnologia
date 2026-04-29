@@ -171,6 +171,7 @@ export function Dashboard() {
         por_forma: result.por_forma,
         suprimento_inicial: result.suprimento_inicial,
         total_descontos: result.total_descontos,
+        total_bruto: result.total_bruto,
         descontos_por_motivo: result.descontos_por_motivo,
       })
 
@@ -407,6 +408,24 @@ export function Dashboard() {
                     <span>{formatCurrency(getFormaTotal(forma))}</span>
                   </div>
                 ))}
+                {(caixaStats.total_descontos ?? 0) > 0 && (
+                  <>
+                    <div className="flex justify-between mt-1 pt-1 border-t">
+                      <span className="text-muted-foreground">Total bruto</span>
+                      <span>{formatCurrency(caixaStats.total_bruto ?? caixaStats.total_valor)}</span>
+                    </div>
+                    <div className="flex justify-between text-rose-600">
+                      <span>Descontos</span>
+                      <span>-{formatCurrency(caixaStats.total_descontos)}</span>
+                    </div>
+                    {(caixaStats.descontos_por_motivo ?? []).map((d: { motivo: string; total: number }) => (
+                      <div key={d.motivo} className="flex justify-between text-xs text-muted-foreground pl-3">
+                        <span>{d.motivo}</span>
+                        <span>-{formatCurrency(d.total)}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
                 <div className="flex justify-between font-semibold mt-1 pt-1 border-t">
                   <span>Total Líquido</span>
                   <span>{formatCurrency(caixaStats.total_valor)}</span>

@@ -19,11 +19,12 @@ export function registerCashHandlers(ipcMain: IpcMain, db: Database.Database): v
     suprimento_inicial?: number
   }) => {
     const id = randomUUID()
+    const agora = new Date().toISOString()
     db.prepare(`
       INSERT INTO fechamentos_caixa
         (id, estabelecimento_id, operador_id, operador_nome, suprimento_inicial, abertura_em, status)
-      VALUES (?, ?, ?, ?, ?, datetime('now'), 'aberto')
-    `).run(id, data.estabelecimentoId, data.operadorId ?? null, data.operador_nome ?? null, data.suprimento_inicial ?? 0)
+      VALUES (?, ?, ?, ?, ?, ?, 'aberto')
+    `).run(id, data.estabelecimentoId, data.operadorId ?? null, data.operador_nome ?? null, data.suprimento_inicial ?? 0, agora)
     triggerSync()
     return { id }
   })
@@ -131,12 +132,13 @@ export function registerCashHandlers(ipcMain: IpcMain, db: Database.Database): v
       GROUP BY motivo_desconto
     `).all(caixa.estabelecimento_id, caixa.abertura_em) as any[]
 
+    const fechamentoEm = new Date().toISOString()
     db.prepare(`
       UPDATE fechamentos_caixa
-      SET status = 'fechado', fechamento_em = datetime('now'),
+      SET status = 'fechado', fechamento_em = ?,
           total_entradas = ?, total_valor = ?, observacoes = ?, sincronizado = 0
       WHERE id = ?
-    `).run(stats.total_entradas, stats.total_valor, data.observacoes ?? null, data.caixaId)
+    `).run(fechamentoEm, stats.total_entradas, stats.total_valor, data.observacoes ?? null, data.caixaId)
 
     const updated = db.prepare('SELECT fechamento_em FROM fechamentos_caixa WHERE id = ?').get(data.caixaId) as any
 
