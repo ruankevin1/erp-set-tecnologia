@@ -193,6 +193,16 @@ function runMigrations(db: Database.Database): void {
   ensureDefaultPricingConfig(db)
   deduplicatePricingConfigs(db)
   ensureAdminMaster(db)
+  deduplicateAdminMasters(db)
+}
+
+function deduplicateAdminMasters(db: Database.Database): void {
+  const masters = db.prepare('SELECT id FROM operadores WHERE master = 1 ORDER BY rowid').all() as { id: string }[]
+  if (masters.length > 1) {
+    const del = db.prepare('DELETE FROM operadores WHERE id = ?')
+    for (const { id } of masters.slice(1)) del.run(id)
+    console.log(`[DB] Removidos ${masters.length - 1} admin master(s) duplicados`)
+  }
 }
 
 function ensureEstabelecimento(db: Database.Database): void {

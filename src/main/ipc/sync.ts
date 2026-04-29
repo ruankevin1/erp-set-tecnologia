@@ -109,8 +109,8 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
           const stmtOper = db.prepare(`INSERT OR IGNORE INTO operadores
             (id, estabelecimento_id, nome, login, senha_hash, nivel_acesso, master, ativo, sincronizado)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`)
-          for (const r of operadores)
-            stmtOper.run(r.id, r.estabelecimento_id, r.nome, r.login, defaultHash, r.nivel_acesso ?? 'operador', r.master ?? 0, r.ativo ?? 1)
+          for (const r of operadores.filter(r => !r.master))
+            stmtOper.run(r.id, r.estabelecimento_id, r.nome, r.login, defaultHash, r.nivel_acesso ?? 'operador', 0, r.ativo ?? 1)
           if (operadores.length > 0) {
             const ids = operadores.map((r) => `'${r.id}'`).join(',')
             db.exec(`UPDATE operadores SET sincronizado = 1 WHERE id IN (${ids})`)
