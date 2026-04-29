@@ -208,8 +208,8 @@ function deduplicateAdminMasters(db: Database.Database): void {
 function ensureEstabelecimento(db: Database.Database): void {
   const id = process.env.VITE_ESTABELECIMENTO_ID ?? '539eef80-ec1a-4567-98a2-f5dd0ab1c8c4'
   db.prepare(`
-    INSERT OR IGNORE INTO estabelecimentos (id, nome, ativo)
-    VALUES (?, 'PlayKids', 1)
+    INSERT OR IGNORE INTO estabelecimentos (id, nome, ativo, sincronizado)
+    VALUES (?, 'PlayKids', 1, 1)
   `).run(id)
 }
 
@@ -221,8 +221,8 @@ function ensureDefaultPricingConfig(db: Database.Database): void {
   if (!existing) {
     db.prepare(`
       INSERT INTO configuracoes_preco
-        (id, estabelecimento_id, nome, valor_base, minutos_base, faixas_intermediarias, franquia_minutos, valor_bloco, minutos_por_bloco, ativo)
-      VALUES (?, ?, 'Padrão', 25, 30, '[]', 60, 5, 15, 1)
+        (id, estabelecimento_id, nome, valor_base, minutos_base, faixas_intermediarias, franquia_minutos, valor_bloco, minutos_por_bloco, ativo, sincronizado)
+      VALUES (?, ?, 'Padrão', 25, 30, '[]', 60, 5, 15, 1, 1)
     `).run(randomUUID(), id)
   }
 }
