@@ -127,6 +127,7 @@ const api = {
     },
     startDownload: () => ipcRenderer.invoke('updater:start-download'),
     install: () => ipcRenderer.invoke('updater:install'),
+    checkNow: () => ipcRenderer.invoke('updater:check-now'),
   }
 }
 

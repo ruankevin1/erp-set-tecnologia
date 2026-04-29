@@ -60,6 +60,10 @@ function setupAutoUpdater(): void {
   ipcMain.handle('updater:install', () => {
     autoUpdater.quitAndInstall()
   })
+
+  ipcMain.handle('updater:check-now', async () => {
+    await autoUpdater.checkForUpdates()
+  })
 }
 
 function createWindow(): void {
@@ -87,8 +91,7 @@ function createWindow(): void {
     startAutoSync()
 
     if (app.isPackaged) {
-      autoUpdater.checkForUpdates()
-      // Verificar novamente a cada 4 horas
+      setTimeout(() => autoUpdater.checkForUpdates(), 3000)
       setInterval(() => autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000)
     }
   })

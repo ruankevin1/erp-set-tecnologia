@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/useToast'
 import type { UsuarioItem } from '@/types'
 import { cn } from '@/lib/utils'
 import { ESTABELECIMENTO_ID } from '@/lib/supabase'
+import { version } from '../../../../package.json'
 import type { FaixaIntermediaria, SyncPushResult } from '@/types'
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -1186,9 +1187,18 @@ function ConfiguracoesContent() {
           </div>
           <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.sobre ? 'rotate-180' : '')} />
         </CardHeader>
-        {secoesAbertas.sobre && <CardContent className="text-sm text-muted-foreground space-y-1">
-          <p>ERP Set Tecnologia v1.0.0</p>
-          <p>Estabelecimento ID: <code className="text-xs bg-muted px-1 py-0.5 rounded">{ESTABELECIMENTO_ID}</code></p>
+        {secoesAbertas.sobre && <CardContent className="text-sm text-muted-foreground space-y-3">
+          <div className="space-y-1">
+            <p>ERP Set Tecnologia <strong>v{version}</strong></p>
+            <p>Estabelecimento ID: <code className="text-xs bg-muted px-1 py-0.5 rounded">{ESTABELECIMENTO_ID}</code></p>
+          </div>
+          <Button variant="outline" size="sm" onClick={async () => {
+            await window.api.updater?.checkNow?.()
+            toast({ title: 'Verificando atualizações...', description: 'Aguarde alguns segundos.' })
+          }}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Verificar atualizações
+          </Button>
         </CardContent>}
       </Card>
 
