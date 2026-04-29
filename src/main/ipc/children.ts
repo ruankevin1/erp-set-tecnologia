@@ -162,6 +162,13 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
   })
 
   ipcMain.handle('guardians:delete', (_event, id: string) => {
+    const activeVisit = db.prepare(`
+      SELECT v.id FROM visitas v
+      INNER JOIN criancas c ON c.id = v.crianca_id
+      WHERE c.responsavel_id = ? AND v.status = 'ativa' LIMIT 1
+    `).get(id)
+    if (activeVisit) throw new Error('Responsável possui criança com visita ativa')
+
     db.prepare(`
       UPDATE criancas SET deletado_em = datetime('now'), sincronizado = 0 WHERE responsavel_id = ? AND deletado_em IS NULL
     `).run(id)

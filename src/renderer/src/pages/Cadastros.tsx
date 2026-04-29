@@ -244,8 +244,10 @@ export function Cadastros() {
       toast({ title: 'Responsável excluído', description: `${deleteGuardian.nome} e seus cadastros foram removidos.` })
       setDeleteGuardianOpen(false)
       loadGuardians()
-    } catch {
-      toast({ title: 'Erro', description: 'Não foi possível excluir o responsável.', variant: 'destructive' })
+    } catch (err: any) {
+      const raw = err?.message ?? ''
+      const msg = raw.includes('Error: ') ? raw.split('Error: ').pop()! : (raw || 'Erro ao excluir responsável.')
+      toast({ title: 'Não foi possível excluir', description: msg, variant: 'destructive' })
     }
     setDeleteGuardianLoading(false)
   }
@@ -440,8 +442,10 @@ export function Cadastros() {
       toast({ title: 'Cadastro excluído', description: `${deleteChild.nome} foi removido.` })
       setDeleteOpen(false)
       loadChildren()
-    } catch {
-      toast({ title: 'Erro', description: 'Não foi possível excluir o cadastro.', variant: 'destructive' })
+    } catch (err: any) {
+      const raw = err?.message ?? ''
+      const msg = raw.includes('Error: ') ? raw.split('Error: ').pop()! : (raw || 'Erro ao excluir cadastro.')
+      toast({ title: 'Não foi possível excluir', description: msg, variant: 'destructive' })
     }
     setDeleteLoading(false)
   }
