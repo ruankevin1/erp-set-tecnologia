@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { mkdirSync } from 'fs'
 import { randomUUID } from 'crypto'
 import bcrypt from 'bcryptjs'
@@ -8,8 +8,8 @@ import bcrypt from 'bcryptjs'
 let db: Database.Database
 
 export function initDatabase(): Database.Database {
-  const userDataPath = app.getPath('userData')
-  const dbDir = join(userDataPath, 'data')
+  const baseDir = app.isPackaged ? dirname(app.getPath('exe')) : app.getPath('userData')
+  const dbDir = join(baseDir, 'data')
   mkdirSync(dbDir, { recursive: true })
 
   const dbPath = join(dbDir, 'playkids.db')

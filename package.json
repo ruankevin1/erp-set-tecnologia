@@ -1,6 +1,6 @@
 {
   "name": "erp-set-tecnologia",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "ERP Set Tecnologia - Controle de Playground Infantil",
   "main": "./out/main/index.js",
   "scripts": {
@@ -72,7 +72,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": true
+      "perMachine": true,
+      "include": "build/installer.nsh"
     },
     "extraResources": [
       {
