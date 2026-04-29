@@ -8,8 +8,8 @@ import bcrypt from 'bcryptjs'
 let db: Database.Database
 
 export function initDatabase(): Database.Database {
-  const userDataPath = app.getPath('userData')
-  const dbDir = join(userDataPath, 'data')
+  const userDataPath = app.getPath('commonAppData')
+  const dbDir = join(userDataPath, 'ERP Set Tecnologia', 'data')
   mkdirSync(dbDir, { recursive: true })
 
   const dbPath = join(dbDir, 'playkids.db')

@@ -168,7 +168,7 @@ export async function pushToSupabase(
       if (rows.length === 0) continue
 
       // Strip internal fields before sending to Supabase
-      const clean = rows.map(({ sincronizado: _s, senha_hash: _h, deletado_em: _d, ...rest }) => rest)
+      const clean = rows.map(({ sincronizado: _s, senha_hash: _h, deletado_em: _d, configuracao_preco_snapshot: _cp, ...rest }) => rest)
       console.log(`[sync] ${table}: ${rows.length} registro(s)`)
 
       const res = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
