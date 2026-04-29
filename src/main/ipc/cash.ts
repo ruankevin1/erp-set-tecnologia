@@ -134,7 +134,7 @@ export function registerCashHandlers(ipcMain: IpcMain, db: Database.Database): v
     db.prepare(`
       UPDATE fechamentos_caixa
       SET status = 'fechado', fechamento_em = datetime('now'),
-          total_entradas = ?, total_valor = ?, observacoes = ?
+          total_entradas = ?, total_valor = ?, observacoes = ?, sincronizado = 0
       WHERE id = ?
     `).run(stats.total_entradas, stats.total_valor, data.observacoes ?? null, data.caixaId)
 

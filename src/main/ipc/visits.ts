@@ -185,7 +185,7 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
 
     const updateVisita = db.transaction(() => {
       db.prepare(`
-        UPDATE visitas SET saida_em = ?, valor_total = ?, valor_original = ?, desconto_tipo = ?, desconto_valor = ?, motivo_desconto = ?, forma_pagamento = ?, status = 'finalizada' WHERE id = ?
+        UPDATE visitas SET saida_em = ?, valor_total = ?, valor_original = ?, desconto_tipo = ?, desconto_valor = ?, motivo_desconto = ?, forma_pagamento = ?, status = 'finalizada', sincronizado = 0 WHERE id = ?
       `).run(saidaEm, valorFinal, valorOriginal, desc?.tipo ?? null, desc?.valor ?? null, desc?.motivo ?? null, data.formaPagamento ?? null, data.visitaId)
 
       if (configuracaoAplicada) {
@@ -243,7 +243,7 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
         const valor = configuracaoAplicada ? calcularValor(minutosTotais, configuracaoAplicada) : 0
 
         db.prepare(`
-          UPDATE visitas SET saida_em = ?, valor_total = ?, forma_pagamento = ?, status = 'finalizada' WHERE id = ?
+          UPDATE visitas SET saida_em = ?, valor_total = ?, forma_pagamento = ?, status = 'finalizada', sincronizado = 0 WHERE id = ?
         `).run(saidaEm, valor, data.formaPagamento ?? null, visitaId)
 
         if (configuracaoAplicada) {
@@ -382,7 +382,7 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
     const saveConfig = db.transaction(() => {
       // Deactivate all other active configs — ensures only one active at a time
       db.prepare(
-        'UPDATE configuracoes_preco SET ativo = 0 WHERE estabelecimento_id = ? AND id != ?'
+        'UPDATE configuracoes_preco SET ativo = 0, sincronizado = 0 WHERE estabelecimento_id = ? AND id != ?'
       ).run(estabelecimentoId, configId)
 
       if (existing) {

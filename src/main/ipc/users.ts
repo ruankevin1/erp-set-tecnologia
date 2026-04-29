@@ -73,14 +73,14 @@ export function registerUsersHandlers(ipcMain: IpcMain, db: Database.Database): 
       if (!user) return { ok: false, erro: 'Usuário não encontrado' }
 
       if (user.master) {
-        db.prepare('UPDATE operadores SET nome = ? WHERE id = ?').run(nome.trim(), id)
+        db.prepare('UPDATE operadores SET nome = ?, sincronizado = 0 WHERE id = ?').run(nome.trim(), id)
         return { ok: true }
       }
 
       const existing = db.prepare('SELECT id FROM operadores WHERE login = ? AND id != ?').get(login.trim().toLowerCase(), id)
       if (existing) return { ok: false, erro: 'Login já está em uso' }
 
-      db.prepare('UPDATE operadores SET nome = ?, login = ?, nivel_acesso = ? WHERE id = ?')
+      db.prepare('UPDATE operadores SET nome = ?, login = ?, nivel_acesso = ?, sincronizado = 0 WHERE id = ?')
         .run(nome.trim(), login.trim().toLowerCase(), perfil, id)
       return { ok: true }
     } catch (err) {
@@ -94,7 +94,7 @@ export function registerUsersHandlers(ipcMain: IpcMain, db: Database.Database): 
       const user = db.prepare('SELECT master, ativo FROM operadores WHERE id = ?').get(id) as any
       if (!user) return { ok: false, erro: 'Usuário não encontrado' }
       if (user.master) return { ok: false, erro: 'Admin master não pode ser desativado' }
-      db.prepare('UPDATE operadores SET ativo = ? WHERE id = ?').run(user.ativo ? 0 : 1, id)
+      db.prepare('UPDATE operadores SET ativo = ?, sincronizado = 0 WHERE id = ?').run(user.ativo ? 0 : 1, id)
       return { ok: true }
     } catch (err) {
       console.error('[users:toggle-active]', err)
