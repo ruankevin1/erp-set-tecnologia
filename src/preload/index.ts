@@ -107,8 +107,8 @@ const api = {
     resetInstallation: () => ipcRenderer.invoke('app:reset-installation'),
   },
   updater: {
-    onUpdateAvailable: (cb: (data: { version: string }) => void) => {
-      const handler = (_e: Electron.IpcRendererEvent, data: { version: string }) => cb(data)
+    onUpdateAvailable: (cb: (data: { version: string; releaseNotes: string | null }) => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, data: { version: string; releaseNotes: string | null }) => cb(data)
       ipcRenderer.on('updater:update-available', handler)
       return () => ipcRenderer.removeListener('updater:update-available', handler)
     },

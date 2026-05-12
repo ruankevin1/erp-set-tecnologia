@@ -32,8 +32,8 @@ export function Layout() {
   useEffect(() => {
     if (!window.api.updater) return
 
-    const offAvailable = window.api.updater.onUpdateAvailable(({ version }) => {
-      setUpdateAvailable(version)
+    const offAvailable = window.api.updater.onUpdateAvailable(({ version, releaseNotes }) => {
+      setUpdateAvailable(version, releaseNotes)
     })
     const offProgress = window.api.updater.onDownloadProgress(({ percent }) => {
       setDownloadProgress(percent)

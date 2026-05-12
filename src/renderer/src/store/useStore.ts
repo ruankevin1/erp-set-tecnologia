@@ -16,6 +16,7 @@ interface AppState {
   loading: boolean
   updateAvailable: boolean
   updateVersion: string | null
+  updateReleaseNotes: string | null
   updateDownloaded: boolean
   downloadProgress: number | null
   setVisitasAtivas: (visitas: Visita[]) => void
@@ -30,7 +31,7 @@ interface AppState {
   setEstabelecimentoId: (id: string) => void
   setNomeEstabelecimento: (nome: string) => void
   setLoading: (loading: boolean) => void
-  setUpdateAvailable: (version: string) => void
+  setUpdateAvailable: (version: string, releaseNotes?: string | null) => void
   setUpdateDownloaded: (version: string) => void
   setDownloadProgress: (percent: number | null) => void
   refreshVisitas: () => Promise<void>
@@ -52,6 +53,7 @@ export const useStore = create<AppState>((set, get) => ({
   loading: false,
   updateAvailable: false,
   updateVersion: null,
+  updateReleaseNotes: null,
   updateDownloaded: false,
   downloadProgress: null,
 
@@ -70,7 +72,7 @@ export const useStore = create<AppState>((set, get) => ({
   setEstabelecimentoId: (id) => set({ estabelecimentoId: id }),
   setNomeEstabelecimento: (nome) => set({ nomeEstabelecimento: nome }),
   setLoading: (loading) => set({ loading }),
-  setUpdateAvailable: (version) => set({ updateAvailable: true, updateVersion: version }),
+  setUpdateAvailable: (version, releaseNotes) => set({ updateAvailable: true, updateVersion: version, updateReleaseNotes: releaseNotes ?? null }),
   setUpdateDownloaded: (version) => set({ updateDownloaded: true, updateVersion: version }),
   setDownloadProgress: (percent) => set({ downloadProgress: percent }),
 

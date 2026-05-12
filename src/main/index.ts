@@ -30,7 +30,10 @@ function setupAutoUpdater(): void {
 
   autoUpdater.on('update-available', (info) => {
     console.log(`[updater] Atualização disponível: v${info.version}`)
-    mainWindow?.webContents.send('updater:update-available', { version: info.version })
+    mainWindow?.webContents.send('updater:update-available', {
+      version: info.version,
+      releaseNotes: info.releaseNotes ?? null,
+    })
   })
 
   autoUpdater.on('update-not-available', () => {
