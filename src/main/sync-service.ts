@@ -185,20 +185,48 @@ export async function pushToSupabase(
       const clean = rows.map(({ sincronizado: _s, senha_hash: _h, deletado_em: _d, configuracao_preco_snapshot: _cp, ...rest }) => rest)
       console.log(`[sync] ${table}: ${rows.length} registro(s)`)
 
+      const headers = {
+        apikey: apiKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal'
+      }
+
       const res = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
         method: 'POST',
-        headers: {
-          apikey: apiKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-          Prefer: 'resolution=merge-duplicates,return=minimal'
-        },
+        headers,
         body: JSON.stringify(clean)
       })
 
       if (!res.ok) {
         const body = await res.text()
         console.error(`[sync] ${table} HTTP ${res.status}:`, body)
+
+        // FK (409) ou RLS (401/403): tenta individualmente para não prender registros válidos
+        if (res.status === 409 || res.status === 401 || res.status === 403) {
+          const updateStmt = db.prepare(`UPDATE ${table} SET sincronizado = 1 WHERE id = ?`)
+          let ok = 0
+          for (let i = 0; i < clean.length; i++) {
+            const singleRes = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify([clean[i]])
+            })
+            if (singleRes.ok) {
+              updateStmt.run(rows[i].id)
+              ok++
+            } else {
+              const singleBody = await singleRes.text()
+              console.warn(`[sync] ${table} id=${rows[i].id} HTTP ${singleRes.status}: ${singleBody}`)
+            }
+          }
+          pushed[pushedKey] = (pushed[pushedKey] ?? 0) + ok
+          if (ok < clean.length) {
+            errors.push(`[${table}] ${clean.length - ok} registro(s) pendentes (dependência não sincronizada)`)
+          }
+          continue
+        }
+
         throw new Error(`[${table}] HTTP ${res.status}: ${body}`)
       }
 
