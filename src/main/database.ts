@@ -1,18 +1,33 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join, dirname } from 'path'
-import { mkdirSync } from 'fs'
+import { mkdirSync, existsSync, copyFileSync } from 'fs'
 import { randomUUID } from 'crypto'
 import bcrypt from 'bcryptjs'
 
 let db: Database.Database
 
 export function initDatabase(): Database.Database {
-  const baseDir = app.isPackaged ? dirname(app.getPath('exe')) : app.getPath('userData')
+  // userData (AppData\Roaming\...) sobrevive a updates do NSIS — caminho correto para dados do usuário
+  const baseDir = app.getPath('userData')
   const dbDir = join(baseDir, 'data')
   mkdirSync(dbDir, { recursive: true })
 
   const dbPath = join(dbDir, 'playkids.db')
+
+  // Migração: se o banco ainda está no diretório antigo (ao lado do .exe), move para userData
+  if (app.isPackaged && !existsSync(dbPath)) {
+    const oldDir = join(dirname(app.getPath('exe')), 'data')
+    const oldPath = join(oldDir, 'playkids.db')
+    if (existsSync(oldPath)) {
+      try {
+        copyFileSync(oldPath, dbPath)
+        console.log('[DB] Banco migrado de', oldPath, 'para', dbPath)
+      } catch (e) {
+        console.error('[DB] Falha ao migrar banco:', e)
+      }
+    }
+  }
   console.log('[DB] Banco de dados:', dbPath)
   db = new Database(dbPath)
 
