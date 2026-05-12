@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Navigate } from 'react-router-dom'
 import {
   Save, Printer, RefreshCw, CheckCircle, XCircle,
   Plus, Trash2, Lock, Eye, Wifi, Usb, AlertTriangle, Upload, ChevronDown,
@@ -21,6 +22,44 @@ import { ESTABELECIMENTO_ID } from '@/lib/supabase'
 import { version } from '../../../../package.json'
 import type { FaixaIntermediaria, SyncPushResult } from '@/types'
 
+function NumericInput({ value, onChange, decimal = false, className, ...props }: {
+  value: number
+  onChange: (v: number) => void
+  decimal?: boolean
+  className?: string
+  [key: string]: any
+}) {
+  const [raw, setRaw] = useState(value === 0 ? '' : String(value))
+
+  useEffect(() => {
+    const parsed = decimal ? parseFloat(raw.replace(',', '.')) : parseInt(raw)
+    if (isNaN(parsed) || parsed !== value) setRaw(value === 0 ? '' : String(value))
+  }, [value])
+
+  return (
+    <Input
+      {...props}
+      type="text"
+      inputMode={decimal ? 'decimal' : 'numeric'}
+      className={className}
+      value={raw}
+      onChange={(e) => {
+        const v = e.target.value.replace(',', '.')
+        if (/^[0-9]*\.?[0-9]*$/.test(v) || v === '') {
+          setRaw(e.target.value)
+          const parsed = decimal ? parseFloat(v) : parseInt(v)
+          if (!isNaN(parsed)) onChange(parsed)
+        }
+      }}
+      onBlur={() => {
+        const parsed = decimal ? parseFloat(raw.replace(',', '.')) : parseInt(raw)
+        if (isNaN(parsed) || raw === '') { setRaw('0'); onChange(0) }
+        else setRaw(decimal ? String(parsed) : String(parsed))
+      }}
+    />
+  )
+}
+
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
@@ -42,13 +81,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 export function Configuracoes() {
   const { usuario } = useAuthStore()
-  if (usuario?.perfil !== 'admin') {
-    return (
-      <div className="min-h-full flex items-center justify-center p-6">
-        <p className="text-muted-foreground text-sm">Acesso restrito a administradores.</p>
-      </div>
-    )
-  }
+  if (usuario?.perfil !== 'admin') return <Navigate to="/" replace />
   return <ConfiguracoesContent />
 }
 
@@ -115,6 +148,9 @@ function ConfiguracoesContent() {
   const [estabTel1, setEstabTel1] = useState('')
   const [estabTel2, setEstabTel2] = useState('')
   const [savingEstab, setSavingEstab] = useState(false)
+
+  // Permissões de operador
+  const [permissaoPausaOperador, setPermissaoPausaOperador] = useState(false)
 
   // Tabela de preços
   const [precoBase, setPrecoBase] = useState(25)
@@ -250,11 +286,17 @@ function ConfiguracoesContent() {
     setPrinterPort(all['printer_port'] ?? '9100')
     setPrinterUsbName(all['printer_usb_name'] ?? '')
 
+    const savedIface = all['printer_interface'] as string | undefined
+    if (savedIface) {
+      window.api.printer.test(savedIface).then(res => setPrinterOk(res.success)).catch(() => setPrinterOk(false))
+    }
+
     setTicketExibirCodigo((all['ticket_exibir_codigo'] ?? 'true') !== 'false')
     setTicketExibirEntrada((all['ticket_exibir_entrada'] ?? 'true') !== 'false')
     setTicketExibirTabela((all['ticket_exibir_tabela'] ?? 'true') !== 'false')
     setTicketRodape1(all['rodape_ticket'] ?? 'Agradecemos sua visita!')
     setTicketRodape2(all['ticket_rodape2'] ?? '')
+    setPermissaoPausaOperador(all['permissao_pausa_operador'] === 'true')
 
     if (all['supabase_key']) setSupabaseKey(all['supabase_key'])
   }
@@ -617,6 +659,25 @@ function ConfiguracoesContent() {
                 ))}
               </div>
             )}
+
+            {usuario?.master && (
+              <div className="border-t pt-4 mt-2 space-y-3">
+                <p className="text-sm font-medium">Permissões dos operadores</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm">Pausar tempo de visita</p>
+                    <p className="text-xs text-muted-foreground">Permite que operadores pausem o cronômetro</p>
+                  </div>
+                  <Toggle
+                    checked={permissaoPausaOperador}
+                    onChange={async (v) => {
+                      setPermissaoPausaOperador(v)
+                      await window.api.settings.set('permissao_pausa_operador', v ? 'true' : 'false')
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </CardContent>
         )}
       </Card>
@@ -676,20 +737,12 @@ function ConfiguracoesContent() {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Valor base (R$)</Label>
-              <Input
-                type="number" min="0" step="0.01"
-                value={precoBase}
-                onChange={(e) => setPrecoBase(parseFloat(e.target.value) || 0)}
-              />
+              <NumericInput decimal value={precoBase} onChange={setPrecoBase} />
               <p className="text-xs text-muted-foreground">Valor cobrado na franquia inicial</p>
             </div>
             <div className="space-y-1.5">
               <Label>Franquia inicial (min)</Label>
-              <Input
-                type="number" min="1"
-                value={minutosBase}
-                onChange={(e) => setMinutosBase(parseInt(e.target.value) || 0)}
-              />
+              <NumericInput value={minutosBase} onChange={setMinutosBase} />
               <p className="text-xs text-muted-foreground">Tempo incluso no valor base</p>
             </div>
           </div>
@@ -710,18 +763,17 @@ function ConfiguracoesContent() {
               {faixas.map((faixa, i) => (
                 <div key={i} className="flex items-center gap-2 p-2 bg-muted/40 rounded-md">
                   <span className="text-xs text-muted-foreground whitespace-nowrap">Até</span>
-                  <Input
-                    type="number" min="1"
+                  <NumericInput
                     value={faixa.ate_minutos}
-                    onChange={(e) => updateFaixa(i, 'ate_minutos', parseInt(e.target.value) || 0)}
+                    onChange={(v) => updateFaixa(i, 'ate_minutos', v)}
                     className="w-20 h-8 text-sm"
                   />
                   <span className="text-xs text-muted-foreground whitespace-nowrap">min →</span>
                   <span className="text-xs text-muted-foreground">R$</span>
-                  <Input
-                    type="number" min="0" step="0.01"
+                  <NumericInput
+                    decimal
                     value={faixa.valor}
-                    onChange={(e) => updateFaixa(i, 'valor', parseFloat(e.target.value) || 0)}
+                    onChange={(v) => updateFaixa(i, 'valor', v)}
                     className="w-24 h-8 text-sm"
                   />
                   <Button
@@ -740,20 +792,12 @@ function ConfiguracoesContent() {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Valor por bloco (R$)</Label>
-              <Input
-                type="number" min="0" step="0.01"
-                value={valorBloco}
-                onChange={(e) => setValorBloco(parseFloat(e.target.value) || 0)}
-              />
+              <NumericInput decimal value={valorBloco} onChange={setValorBloco} />
               <p className="text-xs text-muted-foreground">Acréscimo após todas as faixas</p>
             </div>
             <div className="space-y-1.5">
               <Label>Minutos por bloco</Label>
-              <Input
-                type="number" min="1"
-                value={minutosPorBloco}
-                onChange={(e) => setMinutosPorBloco(parseInt(e.target.value) || 0)}
-              />
+              <NumericInput value={minutosPorBloco} onChange={setMinutosPorBloco} />
               <p className="text-xs text-muted-foreground">Intervalo de cobrança extra</p>
             </div>
           </div>
@@ -861,9 +905,9 @@ function ConfiguracoesContent() {
                 <Printer className="w-3.5 h-3.5 mr-2" />
                 {loadingUsbPrinters ? 'Detectando...' : 'Detectar impressoras USB'}
               </Button>
-              {usbPrinters.length > 0 && (
+              {(usbPrinters.length > 0 || printerUsbName) && (
                 <div className="space-y-1.5">
-                  <Label>Impressora detectada</Label>
+                  <Label>Impressora selecionada</Label>
                   <Select
                     value={printerUsbName}
                     onValueChange={(v) => { setPrinterUsbName(v); setPrinterOk(null) }}
@@ -872,14 +916,14 @@ function ConfiguracoesContent() {
                       <SelectValue placeholder="Selecione uma impressora..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {usbPrinters.map(name => (
+                      {[...new Set([...usbPrinters, ...(printerUsbName ? [printerUsbName] : [])])].map(name => (
                         <SelectItem key={name} value={name}>{name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               )}
-              {usbPrinters.length === 0 && (
+              {usbPrinters.length === 0 && !printerUsbName && (
                 <p className="text-xs text-muted-foreground">
                   Clique em "Detectar impressoras USB" para listar as impressoras disponíveis.
                 </p>

@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react'
 import { calcularDuracao } from '../lib/utils'
 
-export function useTimer(entradaEm: string, ativo = true) {
-  const [duracao, setDuracao] = useState(() => calcularDuracao(entradaEm))
+type Pausa = { inicio: string; fim: string | null }
+
+export function useTimer(entradaEm: string, pausas?: Pausa[], ativo = true) {
+  const pausado = pausas?.some(p => p.fim === null) ?? false
+
+  const [duracao, setDuracao] = useState(() => calcularDuracao(entradaEm, undefined, pausas))
 
   useEffect(() => {
-    if (!ativo) return
+    setDuracao(calcularDuracao(entradaEm, undefined, pausas))
+    if (!ativo || pausado) return
     const interval = setInterval(() => {
-      setDuracao(calcularDuracao(entradaEm))
+      setDuracao(calcularDuracao(entradaEm, undefined, pausas))
     }, 5000)
     return () => clearInterval(interval)
-  }, [entradaEm, ativo])
+  }, [entradaEm, pausas, ativo, pausado])
 
-  return duracao
+  return { ...duracao, pausado }
 }

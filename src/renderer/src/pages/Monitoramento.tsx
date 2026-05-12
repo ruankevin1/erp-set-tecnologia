@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { RefreshCw, Users, LogOut, Phone, Search } from 'lucide-react'
+import { RefreshCw, Users, LogOut, Search, Pause, Play, Phone, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ChildTimer } from '@/components/ChildTimer'
 import { useStore } from '@/store/useStore'
+import { useAuthStore } from '@/store/useAuthStore'
 import { formatTime, calcularIdade, calcularValorAtual, getCorFaixa, calcularDuracao, formatCurrency, calcularProximoAcrescimo, cn } from '@/lib/utils'
 import type { ConfiguracaoPreco, Visita } from '@/types'
 
@@ -41,15 +42,49 @@ const corBadge = {
 
 export function Monitoramento() {
   const { visitasAtivas, pricingConfigs, refreshVisitas, refreshPricing } = useStore()
+  const { usuario } = useAuthStore()
   const navigate = useNavigate()
   const [filtro, setFiltro] = useState('')
+  const [pausandoId, setPausandoId] = useState<string | null>(null)
+  const [podePausar, setPodePausar] = useState(false)
+  const [obsExpandidas, setObsExpandidas] = useState<Set<string>>(new Set())
+
+  function toggleObs(id: string) {
+    setObsExpandidas(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function togglePausa(v: Visita) {
+    if (pausandoId) return
+    setPausandoId(v.id)
+    try {
+      const pausasArr = Array.isArray(v.pausas) ? v.pausas : (typeof v.pausas === 'string' ? JSON.parse(v.pausas || '[]') : [])
+      const pausado = pausasArr.some((p: any) => p.fim === null)
+      if (pausado) {
+        await window.api.visits.resume(v.id)
+      } else {
+        await window.api.visits.pause(v.id)
+      }
+      await refreshVisitas()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setPausandoId(null)
+    }
+  }
 
   useEffect(() => {
     refreshVisitas()
     refreshPricing()
+    window.api.settings.get('permissao_pausa_operador').then(v => setPodePausar(v === 'true'))
     const interval = setInterval(refreshVisitas, 30000)
     return () => clearInterval(interval)
   }, [])
+
+  const podeUsarPausa = usuario?.perfil === 'admin' || podePausar
 
   const grupos = useMemo((): GrupoMonitoramento[] => {
     const map = new Map<string | null, Visita[]>()
@@ -159,13 +194,15 @@ export function Monitoramento() {
                   {grupo.visitas.map((v) => {
                     const idade = v.data_nascimento ? calcularIdade(v.data_nascimento) : null
                     const config = getPricingForVisita(v, pricingConfigs)
-                    const { total: minutos } = calcularDuracao(v.entrada_em)
-                    const valor = config ? calcularValorAtual(minutos, config) : null
-                    const cor = config ? getCorFaixa(minutos, config) : 'verde'
-                    const proximo = config ? calcularProximoAcrescimo(minutos, config) : null
+                    const pausas = Array.isArray(v.pausas) ? v.pausas : (typeof v.pausas === 'string' ? JSON.parse(v.pausas || '[]') : [])
+                    const pausado = pausas.some((p: any) => p.fim === null)
+                    const { total: minutos } = calcularDuracao(v.entrada_em, undefined, pausas)
+                    const valor = config && !pausado ? calcularValorAtual(minutos, config) : null
+                    const cor = pausado ? 'verde' : (config ? getCorFaixa(minutos, config) : 'verde')
+                    const proximo = config && !pausado ? calcularProximoAcrescimo(minutos, config) : null
 
                     return (
-                      <Card key={v.id} className={`hover:shadow-md transition-shadow ${corBorderCard[cor]}`}>
+                      <Card key={v.id} className={`hover:shadow-md transition-shadow ${pausado ? 'border-l-4 border-l-blue-400 opacity-80' : corBorderCard[cor]}`}>
                         <CardContent className="pt-5 pb-4">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex-1 min-w-0">
@@ -178,6 +215,9 @@ export function Monitoramento() {
                               )}
                             </div>
                             <div className="flex flex-col items-end gap-1 ml-2 shrink-0">
+                              {pausado && (
+                                <Badge className="bg-blue-100 text-blue-700 border-blue-300" variant="outline">⏸ Pausado</Badge>
+                              )}
                               {idade !== null && (
                                 <Badge variant="secondary">{idade} anos</Badge>
                               )}
@@ -188,7 +228,7 @@ export function Monitoramento() {
                             <div className="text-xs text-muted-foreground">
                               Entrada: <strong>{formatTime(v.entrada_em)}</strong>
                             </div>
-                            <ChildTimer entradaEm={v.entrada_em} className="text-sm" />
+                            <ChildTimer entradaEm={v.entrada_em} pausas={pausas} className="text-sm" />
                           </div>
 
                           {valor !== null && (
@@ -206,7 +246,54 @@ export function Monitoramento() {
                           )}
                           {!proximo && valor !== null && <div className="mb-3" />}
 
+                          {v.crianca_observacoes && (
+                            <div className="mb-3 overflow-hidden">
+                              <button
+                                className="w-full flex items-start gap-1.5 text-left group min-w-0"
+                                onClick={() => toggleObs(v.id)}
+                              >
+                                <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                                <span className="text-xs text-amber-700 flex-1 min-w-0 break-words leading-snug">
+                                  {obsExpandidas.has(v.id)
+                                    ? v.crianca_observacoes
+                                    : v.crianca_observacoes.length > 60
+                                      ? v.crianca_observacoes.slice(0, 60) + '…'
+                                      : v.crianca_observacoes
+                                  }
+                                </span>
+                                {v.crianca_observacoes.length > 60 && (
+                                  <span className="text-amber-400 shrink-0 mt-0.5">
+                                    {obsExpandidas.has(v.id)
+                                      ? <ChevronUp className="w-3 h-3" />
+                                      : <ChevronDown className="w-3 h-3" />
+                                    }
+                                  </span>
+                                )}
+                              </button>
+                            </div>
+                          )}
+
                           <div className="flex gap-2">
+                            {podeUsarPausa && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={cn(
+                                  'px-2.5',
+                                  pausado
+                                    ? 'border-blue-300 text-blue-600 hover:bg-blue-50'
+                                    : 'border-yellow-300 text-yellow-600 hover:bg-yellow-50'
+                                )}
+                                title={pausado ? 'Retomar' : 'Pausar'}
+                                disabled={pausandoId === v.id}
+                                onClick={() => togglePausa(v)}
+                              >
+                                {pausado
+                                  ? <Play className="w-3.5 h-3.5" />
+                                  : <Pause className="w-3.5 h-3.5" />
+                                }
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"

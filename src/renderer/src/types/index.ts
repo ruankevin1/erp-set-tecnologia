@@ -107,6 +107,8 @@ export interface Visita {
   responsavel_nome?: string
   responsavel_telefone?: string
   data_nascimento?: string
+  pausas?: Array<{ inicio: string; fim: string | null }>
+  crianca_observacoes?: string
 }
 
 export interface VisitaDetalhe extends Visita {

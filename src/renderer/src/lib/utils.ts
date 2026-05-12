@@ -41,10 +41,25 @@ export function calcularIdade(dataNascimento: string): number {
   return idade
 }
 
-export function calcularDuracao(entrada: string, saida?: string): { horas: number; minutos: number; total: number } {
-  const inicio = new Date(entrada)
-  const fim = saida ? new Date(saida) : new Date()
-  const total = Math.floor((fim.getTime() - inicio.getTime()) / 60000)
+export function calcularDuracao(
+  entrada: string,
+  saida?: string,
+  pausas?: Array<{ inicio: string; fim: string | null }>
+): { horas: number; minutos: number; total: number } {
+  const inicioMs = new Date(entrada).getTime()
+  const fimMs = saida ? new Date(saida).getTime() : Date.now()
+  let totalMs = fimMs - inicioMs
+
+  const pausasArr = Array.isArray(pausas) ? pausas : []
+  if (pausasArr.length > 0) {
+    for (const p of pausasArr) {
+      const pInicio = new Date(p.inicio).getTime()
+      const pFim = p.fim ? new Date(p.fim).getTime() : fimMs
+      totalMs -= (pFim - pInicio)
+    }
+  }
+
+  const total = Math.max(0, Math.floor(totalMs / 60000))
   return { horas: Math.floor(total / 60), minutos: total % 60, total }
 }
 

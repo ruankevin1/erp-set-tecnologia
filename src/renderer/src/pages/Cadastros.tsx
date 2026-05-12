@@ -99,6 +99,7 @@ export function Cadastros() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailData, setDetailData] = useState<ChildDetails | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [obsExpanded, setObsExpanded] = useState(false)
 
   // Edit
   const [editOpen, setEditOpen] = useState(false)
@@ -353,6 +354,7 @@ export function Cadastros() {
     setDetailData(null)
     setDetailOpen(true)
     setDetailLoading(true)
+    setObsExpanded(false)
     const res = await window.api.children.getDetails(child.id)
     setDetailData(res)
     setDetailLoading(false)
@@ -948,91 +950,114 @@ export function Cadastros() {
 
       {/* Dialog: histórico / detalhes */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col">
+          <DialogHeader className="shrink-0 pb-4 border-b">
             <DialogTitle>Histórico da Criança</DialogTitle>
           </DialogHeader>
 
-          {detailLoading && <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>}
+          {/* Conteúdo fixo — nunca rola */}
+          <div className="shrink-0 pt-5 space-y-5">
+            {detailLoading && <p className="text-sm text-muted-foreground text-center py-8">Carregando...</p>}
 
-          {detailData && !detailLoading && (
-            <div className="space-y-5">
-              {/* Dados criança + responsável */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Criança</p>
-                  <p className="font-semibold">{detailData.crianca.nome}</p>
-                  {detailData.crianca.data_nascimento && (
-                    <p className="text-sm text-muted-foreground">
-                      {formatDate(detailData.crianca.data_nascimento)} · {calcularIdade(detailData.crianca.data_nascimento)} anos
+            {detailData && !detailLoading && (
+              <>
+                {/* Dados criança + responsável */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Criança</p>
+                    <p className="font-semibold">{detailData.crianca.nome}</p>
+                    {detailData.crianca.data_nascimento && (
+                      <p className="text-sm text-muted-foreground">
+                        {formatDate(detailData.crianca.data_nascimento)} · {calcularIdade(detailData.crianca.data_nascimento)} anos
+                      </p>
+                    )}
+                    {detailData.crianca.cpf && (
+                      <p className="text-sm text-muted-foreground">CPF: {maskCPF(detailData.crianca.cpf)}</p>
+                    )}
+                    {detailData.crianca.observacoes && (
+                      <div className="space-y-1 pt-1">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Observação</p>
+                        {detailData.crianca.observacoes.length > 120 ? (
+                          <button className="text-left w-full group" onClick={() => setObsExpanded(v => !v)}>
+                            <span className={`block text-sm break-words ${obsExpanded ? '' : 'line-clamp-3'}`}>
+                              {detailData.crianca.observacoes}
+                            </span>
+                            <span className="text-xs text-violet-600 group-hover:underline mt-0.5 inline-block">
+                              {obsExpanded ? 'Ver menos' : 'Ver mais'}
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="block text-sm break-words">{detailData.crianca.observacoes}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Responsável</p>
+                    {detailData.crianca.responsavel_nome ? (
+                      <>
+                        <p className="font-semibold">{detailData.crianca.responsavel_nome}</p>
+                        {detailData.crianca.responsavel_cpf && (
+                          <p className="text-sm text-muted-foreground">CPF: {maskCPF(detailData.crianca.responsavel_cpf)}</p>
+                        )}
+                        {detailData.crianca.responsavel_telefone && (
+                          <p className="text-sm text-muted-foreground">Tel: {detailData.crianca.responsavel_telefone}</p>
+                        )}
+                        {detailData.crianca.responsavel_email && (
+                          <p className="text-sm text-muted-foreground">Email: {detailData.crianca.responsavel_email}</p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Sem responsável vinculado</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Totalizadores */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-muted/40 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold">{detailData.stats.total_visitas}</p>
+                    <p className="text-xs text-muted-foreground">Visitas</p>
+                  </div>
+                  <div className="bg-muted/40 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold">{formatCurrency(detailData.stats.total_gasto)}</p>
+                    <p className="text-xs text-muted-foreground">Total gasto</p>
+                  </div>
+                  <div className="bg-muted/40 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold">
+                      {detailData.stats.media_minutos >= 60
+                        ? `${Math.floor(detailData.stats.media_minutos / 60)}h${Math.round(detailData.stats.media_minutos % 60)}min`
+                        : `${Math.round(detailData.stats.media_minutos)}min`}
                     </p>
-                  )}
-                  {detailData.crianca.cpf && (
-                    <p className="text-sm text-muted-foreground">CPF: {maskCPF(detailData.crianca.cpf)}</p>
-                  )}
-                  {detailData.crianca.observacoes && (
-                    <p className="text-sm text-muted-foreground">{detailData.crianca.observacoes}</p>
-                  )}
+                    <p className="text-xs text-muted-foreground">Tempo médio</p>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Responsável</p>
-                  {detailData.crianca.responsavel_nome ? (
-                    <>
-                      <p className="font-semibold">{detailData.crianca.responsavel_nome}</p>
-                      {detailData.crianca.responsavel_cpf && (
-                        <p className="text-sm text-muted-foreground">CPF: {maskCPF(detailData.crianca.responsavel_cpf)}</p>
-                      )}
-                      {detailData.crianca.responsavel_telefone && (
-                        <p className="text-sm text-muted-foreground">Tel: {detailData.crianca.responsavel_telefone}</p>
-                      )}
-                      {detailData.crianca.responsavel_email && (
-                        <p className="text-sm text-muted-foreground">Email: {detailData.crianca.responsavel_email}</p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Sem responsável vinculado</p>
-                  )}
-                </div>
-              </div>
+              </>
+            )}
+          </div>
 
-              {/* Totalizadores */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-muted/40 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold">{detailData.stats.total_visitas}</p>
-                  <p className="text-xs text-muted-foreground">Visitas</p>
-                </div>
-                <div className="bg-muted/40 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold">{formatCurrency(detailData.stats.total_gasto)}</p>
-                  <p className="text-xs text-muted-foreground">Total gasto</p>
-                </div>
-                <div className="bg-muted/40 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold">
-                    {detailData.stats.media_minutos >= 60
-                      ? `${Math.floor(detailData.stats.media_minutos / 60)}h${Math.round(detailData.stats.media_minutos % 60)}min`
-                      : `${Math.round(detailData.stats.media_minutos)}min`}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Tempo médio</p>
-                </div>
-              </div>
-
-              {/* Histórico de visitas */}
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Histórico de visitas</p>
-                {detailData.visitas.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">Nenhuma visita registrada</p>
-                ) : (
-                  <div className="rounded-md border overflow-hidden">
+          {/* Histórico de visitas — só essa parte rola */}
+          {detailData && !detailLoading && (
+            <div className="flex flex-col flex-1 min-h-0 pt-5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 shrink-0">Histórico de visitas</p>
+              {detailData.visitas.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhuma visita registrada</p>
+              ) : (
+                <div className="rounded-md border overflow-hidden flex flex-col flex-1 min-h-0">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 border-b">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Data</th>
+                        <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Entrada</th>
+                        <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Saída</th>
+                        <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Duração</th>
+                        <th className="text-right px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Valor</th>
+                        <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Pagamento</th>
+                      </tr>
+                    </thead>
+                  </table>
+                  <div className="overflow-y-auto flex-1 min-h-0">
                     <table className="w-full text-sm">
-                      <thead className="bg-muted/50 border-b">
-                        <tr>
-                          <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Data</th>
-                          <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Entrada</th>
-                          <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Saída</th>
-                          <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Duração</th>
-                          <th className="text-right px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Valor</th>
-                          <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Pagamento</th>
-                        </tr>
-                      </thead>
                       <tbody className="divide-y">
                         {detailData.visitas.map((v) => (
                           <tr key={v.id} className="hover:bg-muted/20">
@@ -1061,12 +1086,12 @@ export function Cadastros() {
                       </tbody>
                     </table>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 pt-2 border-t">
             <Button
               variant="outline"
               onClick={() => {

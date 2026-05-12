@@ -1,7 +1,10 @@
 import { IpcMain } from 'electron'
 import Database from 'better-sqlite3'
 import { exec } from 'child_process'
-import ThermalPrinter, { PrinterTypes, CharacterSet } from 'node-thermal-printer'
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
+import { ThermalPrinter, PrinterTypes, CharacterSet } from 'node-thermal-printer'
 
 interface FaixaIntermediaria {
   ate_minutos: number
@@ -271,15 +274,88 @@ function buildSaidaText(
   return lines.join('\n')
 }
 
-async function makePrinter(iface: string): Promise<ThermalPrinter> {
+function makePrinter(iface: string): ThermalPrinter {
+  const effectiveIface = iface.startsWith('printer:') ? 'tcp://127.0.0.1:9100' : iface
   return new ThermalPrinter({
     type: PrinterTypes.EPSON,
-    interface: iface,
+    interface: effectiveIface,
     characterSet: CharacterSet.PC850_MULTILINGUAL,
     removeSpecialCharacters: false,
     lineCharacter: '-',
     options: { timeout: 5000 }
   })
+}
+
+async function isConnected(printer: ThermalPrinter, iface: string): Promise<boolean> {
+  if (iface.startsWith('printer:')) {
+    const name = iface.replace('printer:', '')
+    return new Promise(resolve => {
+      exec('wmic printer get name', (err, stdout) => {
+        if (err) { resolve(false); return }
+        resolve(stdout.toLowerCase().includes(name.toLowerCase()))
+      })
+    })
+  }
+  return printer.isPrinterConnected()
+}
+
+async function sendRawToWindowsPrinter(printerName: string, data: Buffer): Promise<void> {
+  const tmpBin = path.join(os.tmpdir(), `pos_${Date.now()}.bin`)
+  await fs.promises.writeFile(tmpBin, data)
+
+  const escapedBin = tmpBin.replace(/\\/g, '\\\\')
+  const ps = [
+    `$bytes = [System.IO.File]::ReadAllBytes("${escapedBin}")`,
+    'Add-Type -TypeDefinition @"',
+    'using System;',
+    'using System.Runtime.InteropServices;',
+    'public class RawPrint {',
+    '  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]',
+    '  public class DOCINFOA { public string pDocName; public string pOutputFile; public string pDataType; }',
+    '  [DllImport("winspool.Drv")] public static extern bool OpenPrinter(string n, out IntPtr h, IntPtr p);',
+    '  [DllImport("winspool.Drv")] public static extern bool ClosePrinter(IntPtr h);',
+    '  [DllImport("winspool.Drv")] public static extern int StartDocPrinter(IntPtr h, int l, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFOA d);',
+    '  [DllImport("winspool.Drv")] public static extern bool EndDocPrinter(IntPtr h);',
+    '  [DllImport("winspool.Drv")] public static extern bool StartPagePrinter(IntPtr h);',
+    '  [DllImport("winspool.Drv")] public static extern bool EndPagePrinter(IntPtr h);',
+    '  [DllImport("winspool.Drv")] public static extern bool WritePrinter(IntPtr h, IntPtr p, int c, out int w);',
+    '}',
+    '"@',
+    '$h = [IntPtr]::Zero',
+    `[RawPrint]::OpenPrinter("${printerName}", [ref]$h, [IntPtr]::Zero) | Out-Null`,
+    '$di = New-Object RawPrint+DOCINFOA; $di.pDocName = "RAW"; $di.pDataType = "RAW"',
+    '[RawPrint]::StartDocPrinter($h, 1, $di) | Out-Null',
+    '[RawPrint]::StartPagePrinter($h) | Out-Null',
+    '$ptr = [System.Runtime.InteropServices.Marshal]::AllocCoTaskMem($bytes.Length)',
+    '[System.Runtime.InteropServices.Marshal]::Copy($bytes, 0, $ptr, $bytes.Length)',
+    '$written = 0',
+    '[RawPrint]::WritePrinter($h, $ptr, $bytes.Length, [ref]$written) | Out-Null',
+    '[System.Runtime.InteropServices.Marshal]::FreeCoTaskMem($ptr)',
+    '[RawPrint]::EndPagePrinter($h) | Out-Null',
+    '[RawPrint]::EndDocPrinter($h) | Out-Null',
+    '[RawPrint]::ClosePrinter($h) | Out-Null',
+    `Remove-Item "${escapedBin}" -Force -ErrorAction SilentlyContinue`,
+  ].join('\n')
+  const tmpPs = path.join(os.tmpdir(), `pos_${Date.now()}.ps1`)
+  await fs.promises.writeFile(tmpPs, ps, 'utf8')
+
+  return new Promise((resolve, reject) => {
+    exec(`powershell.exe -ExecutionPolicy Bypass -File "${tmpPs}"`, (err) => {
+      fs.promises.unlink(tmpPs).catch(() => {})
+      if (err) reject(err)
+      else resolve()
+    })
+  })
+}
+
+async function executePrint(printer: ThermalPrinter, iface: string): Promise<void> {
+  if (iface.startsWith('printer:')) {
+    const name = iface.replace('printer:', '')
+    const buf: Buffer = (printer as any).getBuffer()
+    await sendRawToWindowsPrinter(name, buf)
+  } else {
+    await printer.execute()
+  }
 }
 
 function printHeader(printer: ThermalPrinter, s: TicketSettings): void {
@@ -318,8 +394,9 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     const preview = buildEntradaText(data, configs, s)
 
     try {
-      const printer = await makePrinter(getIface(db))
-      const connected = await printer.isPrinterConnected()
+      const iface = getIface(db)
+      const printer = makePrinter(iface)
+      const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
 
       const dt = new Date(data.entradaEm)
@@ -348,7 +425,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       }
 
       printFooter(printer, s)
-      await printer.execute()
+      await executePrint(printer, iface)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -374,8 +451,9 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     const preview = buildSaidaText(data, s)
 
     try {
-      const printer = await makePrinter(getIface(db))
-      const connected = await printer.isPrinterConnected()
+      const iface = getIface(db)
+      const printer = makePrinter(iface)
+      const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
 
       const entrada = new Date(data.entradaEm)
@@ -422,7 +500,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       if (data.formaPagamento) printer.println(`Pgto: ${data.formaPagamento}`)
 
       printFooter(printer, s)
-      await printer.execute()
+      await executePrint(printer, iface)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -432,8 +510,8 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
   ipcMain.handle('printer:test', async (_event, interfaceUrl?: string) => {
     const iface = interfaceUrl || getIface(db)
     try {
-      const printer = await makePrinter(iface)
-      const connected = await printer.isPrinterConnected()
+      const printer = makePrinter(iface)
+      const connected = await isConnected(printer, iface)
       return { success: connected }
     } catch (err: any) {
       return { success: false, error: err.message }
@@ -483,8 +561,9 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     const preview = lines.join('\n')
 
     try {
-      const printer = await makePrinter(getIface(db))
-      const connected = await printer.isPrinterConnected()
+      const iface = getIface(db)
+      const printer = makePrinter(iface)
+      const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
 
       printHeader(printer, s)
@@ -517,7 +596,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
         printer.println(`FORMA: ${data.formaPagamento.toUpperCase()}`)
       }
       printFooter(printer, s)
-      await printer.execute()
+      await executePrint(printer, iface)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -549,8 +628,9 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     const preview = lines.join('\n')
 
     try {
-      const printer = await makePrinter(getIface(db))
-      const connected = await printer.isPrinterConnected()
+      const iface = getIface(db)
+      const printer = makePrinter(iface)
+      const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
 
       printHeader(printer, s)
@@ -562,7 +642,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       printer.println(`Operador: ${data.operador_nome}`)
       printer.println(col('Suprimento inicial:', brlPad(data.suprimento_inicial)))
       printFooter(printer, s)
-      await printer.execute()
+      await executePrint(printer, iface)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -647,8 +727,9 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     const preview = lines.join('\n')
 
     try {
-      const printer = await makePrinter(getIface(db))
-      const connected = await printer.isPrinterConnected()
+      const iface = getIface(db)
+      const printer = makePrinter(iface)
+      const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
 
       printHeader(printer, s)
@@ -702,7 +783,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       printer.println(col('Total esperado:', brlPad(totalEsperado)))
       printer.bold(false)
       printFooter(printer, s)
-      await printer.execute()
+      await executePrint(printer, iface)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }

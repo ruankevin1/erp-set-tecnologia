@@ -36,6 +36,8 @@ const api = {
       ipcRenderer.invoke('visits:stats', { estabelecimentoId, data }),
     ranking: (estabelecimentoId: string, dataInicio?: string, dataFim?: string) =>
       ipcRenderer.invoke('visits:ranking', { estabelecimentoId, dataInicio, dataFim }),
+    pause: (visitaId: string) => ipcRenderer.invoke('visits:pause', visitaId),
+    resume: (visitaId: string) => ipcRenderer.invoke('visits:resume', visitaId),
   },
   pricing: {
     get: (estabelecimentoId: string) => ipcRenderer.invoke('pricing:get', estabelecimentoId),

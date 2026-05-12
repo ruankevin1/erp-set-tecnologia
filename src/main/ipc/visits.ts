@@ -59,16 +59,20 @@ function selecionarConfig(db: Database.Database, estabelecimentoId: string, cria
 
 export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle('visits:active', (_event, estabelecimentoId: string) => {
-    return db.prepare(`
+    const rows = db.prepare(`
       SELECT v.*,
-             c.nome as crianca_nome, c.data_nascimento,
+             c.nome as crianca_nome, c.data_nascimento, c.observacoes as crianca_observacoes,
              r.nome as responsavel_nome, r.telefone as responsavel_telefone
       FROM visitas v
       JOIN criancas c ON v.crianca_id = c.id
       LEFT JOIN responsaveis r ON v.responsavel_id = r.id
       WHERE v.estabelecimento_id = ? AND v.status = 'ativa'
       ORDER BY v.entrada_em DESC
-    `).all(estabelecimentoId)
+    `).all(estabelecimentoId) as any[]
+    return rows.map(r => ({
+      ...r,
+      pausas: JSON.parse(r.pausas || '[]')
+    }))
   })
 
   ipcMain.handle('visits:create', (_event, data: {
@@ -161,7 +165,14 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
 
     const entrada = new Date(visita.entrada_em)
     const saida = new Date(saidaEm)
-    const minutosTotais = Math.ceil((saida.getTime() - entrada.getTime()) / 60000)
+
+    const pausas: { inicio: string; fim: string | null }[] = JSON.parse(visita.pausas || '[]')
+    const pausadoMs = pausas.reduce((acc, p) => {
+      const pInicio = new Date(p.inicio).getTime()
+      const pFim = p.fim ? new Date(p.fim).getTime() : saida.getTime()
+      return acc + (pFim - pInicio)
+    }, 0)
+    const minutosTotais = Math.max(0, Math.ceil((saida.getTime() - entrada.getTime() - pausadoMs) / 60000))
 
     let configuracaoAplicada: ConfiguracaoPreco | undefined
     if (visita.configuracao_preco_snapshot) {
@@ -230,7 +241,14 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
 
         const entrada = new Date(visita.entrada_em)
         const saida = new Date(saidaEm)
-        const minutosTotais = Math.ceil((saida.getTime() - entrada.getTime()) / 60000)
+
+        const pausasGrupo: { inicio: string; fim: string | null }[] = JSON.parse(visita.pausas || '[]')
+        const pausadoMsGrupo = pausasGrupo.reduce((acc, p) => {
+          const pInicio = new Date(p.inicio).getTime()
+          const pFim = p.fim ? new Date(p.fim).getTime() : saida.getTime()
+          return acc + (pFim - pInicio)
+        }, 0)
+        const minutosTotais = Math.max(0, Math.ceil((saida.getTime() - entrada.getTime() - pausadoMsGrupo) / 60000))
 
         let configuracaoAplicada: ConfiguracaoPreco | undefined
         if (visita.configuracao_preco_snapshot) {
@@ -279,7 +297,13 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
     if (!visita) throw new Error('Visita não encontrada')
 
     const entrada = new Date(visita.entrada_em)
-    const minutosTotais = Math.ceil((agora.getTime() - entrada.getTime()) / 60000)
+    const pausasPreview: { inicio: string; fim: string | null }[] = JSON.parse(visita.pausas || '[]')
+    const pausadoMsPreview = pausasPreview.reduce((acc, p) => {
+      const pInicio = new Date(p.inicio).getTime()
+      const pFim = p.fim ? new Date(p.fim).getTime() : agora.getTime()
+      return acc + (pFim - pInicio)
+    }, 0)
+    const minutosTotais = Math.max(0, Math.ceil((agora.getTime() - entrada.getTime() - pausadoMsPreview) / 60000))
 
     let configuracaoAplicada: ConfiguracaoPreco | undefined
     if (visita.configuracao_preco_snapshot) {
@@ -299,6 +323,27 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
 
     const valor = configuracaoAplicada ? calcularValor(minutosTotais, configuracaoAplicada) : 0
     return { minutos: minutosTotais, valor_estimado: valor }
+  })
+
+  ipcMain.handle('visits:pause', (_event, visitaId: string) => {
+    const visita = db.prepare('SELECT pausas FROM visitas WHERE id = ?').get(visitaId) as any
+    if (!visita) throw new Error('Visita não encontrada')
+    const pausas: { inicio: string; fim: string | null }[] = JSON.parse(visita.pausas || '[]')
+    if (pausas.some(p => p.fim === null)) throw new Error('Visita já está pausada')
+    pausas.push({ inicio: new Date().toISOString(), fim: null })
+    db.prepare('UPDATE visitas SET pausas = ? WHERE id = ?').run(JSON.stringify(pausas), visitaId)
+    return { success: true }
+  })
+
+  ipcMain.handle('visits:resume', (_event, visitaId: string) => {
+    const visita = db.prepare('SELECT pausas FROM visitas WHERE id = ?').get(visitaId) as any
+    if (!visita) throw new Error('Visita não encontrada')
+    const pausas: { inicio: string; fim: string | null }[] = JSON.parse(visita.pausas || '[]')
+    const idx = pausas.findIndex(p => p.fim === null)
+    if (idx === -1) throw new Error('Visita não está pausada')
+    pausas[idx].fim = new Date().toISOString()
+    db.prepare('UPDATE visitas SET pausas = ? WHERE id = ?').run(JSON.stringify(pausas), visitaId)
+    return { success: true }
   })
 
   ipcMain.handle('visits:pricing', (_event, estabelecimentoId: string) => {

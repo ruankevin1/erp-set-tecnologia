@@ -262,6 +262,7 @@ function migrateVisitasColunas(db: Database.Database): void {
   if (!cols.has('desconto_tipo')) db.exec('ALTER TABLE visitas ADD COLUMN desconto_tipo TEXT')
   if (!cols.has('desconto_valor')) db.exec('ALTER TABLE visitas ADD COLUMN desconto_valor REAL')
   if (!cols.has('motivo_desconto')) db.exec('ALTER TABLE visitas ADD COLUMN motivo_desconto TEXT')
+  if (!cols.has('pausas')) db.exec("ALTER TABLE visitas ADD COLUMN pausas TEXT DEFAULT '[]'")
 }
 
 function ensureConfiguracoesSistema(db: Database.Database): void {
@@ -289,6 +290,8 @@ function ensureConfiguracoesSistema(db: Database.Database): void {
     ['ticket_exibir_entrada', 'true'],
     ['ticket_exibir_tabela', 'true'],
     ['ticket_rodape2', ''],
+    // Permissões de operador
+    ['permissao_pausa_operador', 'false'],
   ]
   const stmt = db.prepare('INSERT OR IGNORE INTO configuracoes_sistema (chave, valor) VALUES (?, ?)')
   for (const [k, v] of defaults) stmt.run(k, v)
