@@ -62,7 +62,7 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
     const rows = db.prepare(`
       SELECT v.*,
              c.nome as crianca_nome, c.data_nascimento, c.observacoes as crianca_observacoes,
-             r.nome as responsavel_nome, r.telefone as responsavel_telefone
+             r.nome as responsavel_nome, r.telefone as responsavel_telefone, r.telefone2 as responsavel_telefone2
       FROM visitas v
       JOIN criancas c ON v.crianca_id = c.id
       LEFT JOIN responsaveis r ON v.responsavel_id = r.id

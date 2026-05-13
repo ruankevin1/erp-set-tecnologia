@@ -42,6 +42,7 @@ export function Entrada() {
   const [cpfCriancaError, setCpfCriancaError] = useState('')
   const [novoResp, setNovoResp] = useState('')
   const [novoTel, setNovoTel] = useState('')
+  const [novoTel2, setNovoTel2] = useState('')
   const [telError, setTelError] = useState('')
   const [novoCpfResp, setNovoCpfResp] = useState('')
   const [cpfRespError, setCpfRespError] = useState('')
@@ -54,7 +55,7 @@ export function Entrada() {
 
   const [cpfDupOpen, setCpfDupOpen] = useState(false)
   const [cpfDupResp, setCpfDupResp] = useState<{ id: string; nome: string; telefone?: string } | null>(null)
-  const pendingCadastroRef = useRef<{ nome: string; nasc: string; cpfCrianca: string; obs: string; resp: string; tel: string; cpfResp: string; email: string } | null>(null)
+  const pendingCadastroRef = useRef<{ nome: string; nasc: string; cpfCrianca: string; obs: string; resp: string; tel: string; tel2: string; cpfResp: string; email: string } | null>(null)
 
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewContent, setPreviewContent] = useState('')
@@ -270,7 +271,7 @@ export function Entrada() {
     return true
   }
 
-  async function tentarCadastrar() {
+  async function tentarCadastrar(somenteRegistrar = false) {
     if (!novoNome.trim()) return
     const cpfCriancaOk = validateCpfField(novoCpfCrianca, setCpfCriancaError)
     const cpfRespOk = validateCpfField(novoCpfResp, setCpfRespError)
@@ -283,7 +284,7 @@ export function Entrada() {
     setCadastroLoading(true)
 
     if (linkedGuardian) {
-      await executarCadastro(linkedGuardian.id)
+      await executarCadastro(linkedGuardian.id, somenteRegistrar)
       setCadastroLoading(false)
       return
     }
@@ -294,7 +295,7 @@ export function Entrada() {
       if (existente) {
         pendingCadastroRef.current = {
           nome: novoNome, nasc: novoNasc, cpfCrianca: novoCpfCrianca, obs: novoObs,
-          resp: novoResp, tel: novoTel, cpfResp: novoCpfResp, email: novoEmail
+          resp: novoResp, tel: novoTel, tel2: novoTel2, cpfResp: novoCpfResp, email: novoEmail
         }
         setCpfDupResp(existente)
         setCpfDupOpen(true)
@@ -303,14 +304,14 @@ export function Entrada() {
       }
     }
 
-    await executarCadastro(undefined)
+    await executarCadastro(undefined, somenteRegistrar)
     setCadastroLoading(false)
   }
 
-  async function executarCadastro(responsavelIdExistente: string | undefined) {
+  async function executarCadastro(responsavelIdExistente: string | undefined, somenteRegistrar = false) {
     const dados = pendingCadastroRef.current || {
       nome: novoNome, nasc: novoNasc, cpfCrianca: novoCpfCrianca, obs: novoObs,
-      resp: novoResp, tel: novoTel, cpfResp: novoCpfResp, email: novoEmail
+      resp: novoResp, tel: novoTel, tel2: novoTel2, cpfResp: novoCpfResp, email: novoEmail
     }
     try {
       let responsavelId = responsavelIdExistente
@@ -321,6 +322,7 @@ export function Entrada() {
           nome: dados.resp.trim(),
           cpf: cpfLimpo || undefined,
           telefone: dados.tel.trim() || undefined,
+          telefone2: dados.tel2?.trim() || undefined,
           email: dados.email.trim() || undefined
         })
         responsavelId = resp.id
@@ -362,8 +364,14 @@ export function Entrada() {
       setCadastroOpen(false)
       resetCadastroForm()
       pendingCadastroRef.current = null
-      setSelected(criancaData)
-      setDialogOpen(true)
+      if (somenteRegistrar) {
+        toast({ title: 'Criança cadastrada com sucesso!' })
+        setQuery('')
+        setResults([])
+      } else {
+        setSelected(criancaData)
+        setDialogOpen(true)
+      }
     } catch {
       toast({ title: 'Erro', description: 'Não foi possível cadastrar.', variant: 'destructive' })
     }
@@ -377,6 +385,7 @@ export function Entrada() {
     setCpfCriancaError('')
     setNovoResp('')
     setNovoTel('')
+    setNovoTel2('')
     setTelError('')
     setNovoCpfResp('')
     setCpfRespError('')
@@ -758,18 +767,31 @@ export function Entrada() {
                   )}
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label>
-                    Telefone <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    value={novoTel}
-                    onChange={(e) => { setNovoTel(maskPhone(e.target.value)); setTelError('') }}
-                    onBlur={validateTelField}
-                    placeholder="(00) 00000-0000"
-                    className={telError ? 'border-red-400 focus-visible:ring-red-400' : novoTel && validatePhone(novoTel) ? 'border-green-400 focus-visible:ring-green-400' : ''}
-                  />
-                  {telError && <p className="text-xs text-red-500">{telError}</p>}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>
+                      Telefone 1 <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      value={novoTel}
+                      onChange={(e) => { setNovoTel(maskPhone(e.target.value)); setTelError('') }}
+                      onBlur={validateTelField}
+                      placeholder="(00) 00000-0000"
+                      className={telError ? 'border-red-400 focus-visible:ring-red-400' : novoTel && validatePhone(novoTel) ? 'border-green-400 focus-visible:ring-green-400' : ''}
+                    />
+                    {telError && <p className="text-xs text-red-500">{telError}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>
+                      Telefone 2 <span className="text-muted-foreground font-normal text-xs">(opcional)</span>
+                    </Label>
+                    <Input
+                      value={novoTel2}
+                      onChange={(e) => setNovoTel2(maskPhone(e.target.value))}
+                      placeholder="(00) 00000-0000"
+                      className={novoTel2 && validatePhone(novoTel2) ? 'border-green-400 focus-visible:ring-green-400' : ''}
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
@@ -807,7 +829,14 @@ export function Entrada() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCadastroOpen(false)}>Cancelar</Button>
             <Button
-              onClick={tentarCadastrar}
+              variant="outline"
+              onClick={() => tentarCadastrar(true)}
+              disabled={!canSubmit}
+            >
+              {cadastroLoading ? 'Salvando...' : 'Apenas cadastrar'}
+            </Button>
+            <Button
+              onClick={() => tentarCadastrar(false)}
               disabled={!canSubmit}
               className="bg-violet-600 hover:bg-violet-700"
             >
@@ -846,7 +875,8 @@ export function Entrada() {
                   const resp = await window.api.guardians.create({
                     estabelecimentoId,
                     nome: dados.resp.trim(),
-                    telefone: dados.tel.trim() || undefined
+                    telefone: dados.tel.trim() || undefined,
+                    telefone2: dados.tel2?.trim() || undefined
                   })
                   await executarCadastro(resp.id)
                 }

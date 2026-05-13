@@ -10,7 +10,7 @@ function norm(q: string): string {
 export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle('children:list', (_event, estabelecimentoId: string) => {
     return db.prepare(`
-      SELECT c.*, r.nome as responsavel_nome, r.telefone as responsavel_telefone
+      SELECT c.*, r.nome as responsavel_nome, r.telefone as responsavel_telefone, r.telefone2 as responsavel_telefone2
       FROM criancas c
       LEFT JOIN responsaveis r ON c.responsavel_id = r.id
       WHERE c.estabelecimento_id = ? AND c.deletado_em IS NULL
@@ -20,17 +20,17 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
 
   ipcMain.handle('children:search', (_event, { estabelecimentoId, query }: { estabelecimentoId: string; query: string }) => {
     return db.prepare(`
-      SELECT c.*, r.nome as responsavel_nome, r.telefone as responsavel_telefone,
+      SELECT c.*, r.nome as responsavel_nome, r.telefone as responsavel_telefone, r.telefone2 as responsavel_telefone2,
         MAX(CASE WHEN v.status = 'finalizada' THEN v.entrada_em END) as ultima_visita
       FROM criancas c
       LEFT JOIN responsaveis r ON c.responsavel_id = r.id
       LEFT JOIN visitas v ON c.id = v.crianca_id
       WHERE c.estabelecimento_id = ? AND c.deletado_em IS NULL
-        AND (normalize_text(c.nome) LIKE ? OR normalize_text(r.nome) LIKE ? OR r.telefone LIKE ?)
+        AND (normalize_text(c.nome) LIKE ? OR normalize_text(r.nome) LIKE ? OR r.telefone LIKE ? OR r.telefone2 LIKE ?)
       GROUP BY c.id
       ORDER BY c.nome
       LIMIT 20
-    `).all(estabelecimentoId, `%${norm(query)}%`, `%${norm(query)}%`, `%${query}%`)
+    `).all(estabelecimentoId, `%${norm(query)}%`, `%${norm(query)}%`, `%${query}%`, `%${query}%`)
   })
 
   ipcMain.handle('children:list-with-stats', (_event, { estabelecimentoId, query }: { estabelecimentoId: string; query?: string }) => {
@@ -39,7 +39,7 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
     const base = `
       SELECT c.id, c.nome, c.data_nascimento, c.cpf, c.observacoes, c.responsavel_id,
         r.nome as responsavel_nome, r.cpf as responsavel_cpf,
-        r.telefone as responsavel_telefone, r.email as responsavel_email,
+        r.telefone as responsavel_telefone, r.telefone2 as responsavel_telefone2, r.email as responsavel_email,
         COUNT(CASE WHEN v.status = 'finalizada' THEN 1 END) as total_visitas,
         MAX(CASE WHEN v.status = 'finalizada' THEN v.entrada_em END) as ultima_visita,
         COALESCE(SUM(CASE WHEN v.status = 'finalizada' THEN v.valor_total ELSE 0 END), 0) as total_gasto,
@@ -52,8 +52,8 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
       WHERE c.estabelecimento_id = ? AND c.deletado_em IS NULL
     `
     if (normQ) {
-      return db.prepare(`${base} AND (normalize_text(c.nome) LIKE ? OR normalize_text(r.nome) LIKE ? OR r.telefone LIKE ? OR r.cpf LIKE ? OR c.cpf LIKE ?) GROUP BY c.id ORDER BY c.nome`)
-        .all(estabelecimentoId, normQ, normQ, rawQ, rawQ, rawQ)
+      return db.prepare(`${base} AND (normalize_text(c.nome) LIKE ? OR normalize_text(r.nome) LIKE ? OR r.telefone LIKE ? OR r.telefone2 LIKE ? OR r.cpf LIKE ? OR c.cpf LIKE ?) GROUP BY c.id ORDER BY c.nome`)
+        .all(estabelecimentoId, normQ, normQ, rawQ, rawQ, rawQ, rawQ)
     }
     return db.prepare(`${base} GROUP BY c.id ORDER BY c.nome`).all(estabelecimentoId)
   })
@@ -78,7 +78,7 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
   ipcMain.handle('children:get', (_event, id: string) => {
     return db.prepare(`
       SELECT c.*, r.nome as responsavel_nome, r.cpf as responsavel_cpf,
-        r.telefone as responsavel_telefone, r.email as responsavel_email
+        r.telefone as responsavel_telefone, r.telefone2 as responsavel_telefone2, r.email as responsavel_email
       FROM criancas c
       LEFT JOIN responsaveis r ON c.responsavel_id = r.id
       WHERE c.id = ?
@@ -88,7 +88,7 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
   ipcMain.handle('children:get-details', (_event, id: string) => {
     const crianca = db.prepare(`
       SELECT c.*, r.nome as responsavel_nome, r.cpf as responsavel_cpf,
-        r.telefone as responsavel_telefone, r.email as responsavel_email
+        r.telefone as responsavel_telefone, r.telefone2 as responsavel_telefone2, r.email as responsavel_email
       FROM criancas c
       LEFT JOIN responsaveis r ON c.responsavel_id = r.id
       WHERE c.id = ?
@@ -191,13 +191,14 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
     nome: string
     cpf?: string
     telefone?: string
+    telefone2?: string
     email?: string
   }) => {
     const id = randomUUID()
     db.prepare(`
-      INSERT INTO responsaveis (id, estabelecimento_id, nome, cpf, telefone, email)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, data.estabelecimentoId, data.nome, data.cpf ?? null, data.telefone ?? null, data.email ?? null)
+      INSERT INTO responsaveis (id, estabelecimento_id, nome, cpf, telefone, telefone2, email)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, data.estabelecimentoId, data.nome, data.cpf ?? null, data.telefone ?? null, data.telefone2 ?? null, data.email ?? null)
     triggerSync()
     return { id }
   })
@@ -207,13 +208,14 @@ export function registerChildrenHandlers(ipcMain: IpcMain, db: Database.Database
     nome: string
     cpf?: string
     telefone?: string
+    telefone2?: string
     email?: string
   }) => {
     db.prepare(`
-      UPDATE responsaveis SET nome = ?, cpf = ?, telefone = ?, email = ?,
+      UPDATE responsaveis SET nome = ?, cpf = ?, telefone = ?, telefone2 = ?, email = ?,
         atualizado_em = datetime('now'), sincronizado = 0
       WHERE id = ?
-    `).run(data.nome, data.cpf ?? null, data.telefone ?? null, data.email ?? null, data.id)
+    `).run(data.nome, data.cpf ?? null, data.telefone ?? null, data.telefone2 ?? null, data.email ?? null, data.id)
     triggerSync()
     return { success: true }
   })

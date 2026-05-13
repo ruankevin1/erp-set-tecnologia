@@ -2,6 +2,17 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
+
+// Supress EPIPE errors from broken network connections (e.g. Supabase sync)
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE') return
+  console.error('[uncaughtException]', err)
+})
+process.on('unhandledRejection', (reason) => {
+  const err = reason as NodeJS.ErrnoException
+  if (err?.code === 'EPIPE') return
+  console.error('[unhandledRejection]', reason)
+})
 import { initDatabase } from './database'
 import { registerChildrenHandlers } from './ipc/children'
 import { registerVisitsHandlers } from './ipc/visits'

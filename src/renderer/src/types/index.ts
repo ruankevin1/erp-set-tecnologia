@@ -65,6 +65,7 @@ export interface Crianca {
   responsavel_nome?: string
   responsavel_cpf?: string
   responsavel_telefone?: string
+  responsavel_telefone2?: string
   responsavel_email?: string
   ultima_visita?: string
 }
@@ -80,6 +81,7 @@ export interface ChildWithStats {
   responsavel_nome?: string
   responsavel_cpf?: string
   responsavel_telefone?: string
+  responsavel_telefone2?: string
   responsavel_email?: string
   total_visitas: number
   ultima_visita?: string
@@ -106,6 +108,7 @@ export interface Visita {
   crianca_nome?: string
   responsavel_nome?: string
   responsavel_telefone?: string
+  responsavel_telefone2?: string
   data_nascimento?: string
   pausas?: Array<{ inicio: string; fim: string | null }>
   crianca_observacoes?: string

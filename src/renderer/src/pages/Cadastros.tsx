@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { WhatsAppButton } from '@/components/WhatsAppButton'
 import { Search, Eye, Pencil, LogIn, ChevronUp, ChevronDown, ChevronsUpDown, Users, UserPlus, Baby, Trash2, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +25,7 @@ type ViewMode = 'criancas' | 'responsaveis'
 
 let _childrenCache: ChildWithStats[] = []
 let _guardiansCache: GuardianWithStats[] = []
+
 
 function FilterChip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
@@ -57,6 +59,7 @@ interface EditForm {
   respNome: string
   respCpf: string
   respTel: string
+  respTel2: string
   respEmail: string
 }
 
@@ -104,7 +107,7 @@ export function Cadastros() {
   // Edit
   const [editOpen, setEditOpen] = useState(false)
   const [editChild, setEditChild] = useState<ChildWithStats | null>(null)
-  const [editForm, setEditForm] = useState<EditForm>({ nome: '', nascimento: '', cpf: '', observacoes: '', respNome: '', respCpf: '', respTel: '', respEmail: '' })
+  const [editForm, setEditForm] = useState<EditForm>({ nome: '', nascimento: '', cpf: '', observacoes: '', respNome: '', respCpf: '', respTel: '', respTel2: '', respEmail: '' })
   const [cpfCriancaError, setCpfCriancaError] = useState('')
   const [cpfRespError, setCpfRespError] = useState('')
   const [telEditError, setTelEditError] = useState('')
@@ -133,6 +136,7 @@ export function Cadastros() {
   const [novaChildCpfError, setNovaChildCpfError] = useState('')
   const [novaRespNome, setNovaRespNome] = useState('')
   const [novaRespTel, setNovaRespTel] = useState('')
+  const [novaRespTel2, setNovaRespTel2] = useState('')
   const [novaRespTelError, setNovaRespTelError] = useState('')
   const [novaRespCpf, setNovaRespCpf] = useState('')
   const [novaRespCpfError, setNovaRespCpfError] = useState('')
@@ -176,7 +180,7 @@ export function Cadastros() {
 
   function resetNovaCrianca() {
     setNovaChildNome(''); setNovaChildNasc(''); setNovaChildCpf(''); setNovaChildObs('')
-    setNovaChildCpfError(''); setNovaRespNome(''); setNovaRespTel(''); setNovaRespTelError('')
+    setNovaChildCpfError(''); setNovaRespNome(''); setNovaRespTel(''); setNovaRespTel2(''); setNovaRespTelError('')
     setNovaRespCpf(''); setNovaRespCpfError(''); setNovaRespEmail('')
     setNovaLinkedGuardian(null); setNovaGuardianSuggestions([]); setNovaShowSuggestions(false)
   }
@@ -201,6 +205,7 @@ export function Cadastros() {
           nome: novaRespNome.trim(),
           cpf: cpfLimpo || undefined,
           telefone: novaRespTel.trim() || undefined,
+          telefone2: novaRespTel2.trim() || undefined,
           email: novaRespEmail.trim() || undefined
         })
         responsavelId = resp.id
@@ -370,6 +375,7 @@ export function Cadastros() {
       respNome: child.responsavel_nome || '',
       respCpf: child.responsavel_cpf ? maskCPF(child.responsavel_cpf) : '',
       respTel: child.responsavel_telefone ? maskPhone(child.responsavel_telefone) : '',
+      respTel2: (child as any).responsavel_telefone2 ? maskPhone((child as any).responsavel_telefone2) : '',
       respEmail: child.responsavel_email || ''
     })
     setCpfCriancaError('')
@@ -392,6 +398,15 @@ export function Cadastros() {
     if (!validateCpfField(editForm.cpf, setCpfCriancaError)) return
     if (!validateCpfField(editForm.respCpf, setCpfRespError)) return
 
+    if (editChild.responsavel_id && !editForm.respTel.trim()) {
+      setTelEditError('Telefone obrigatório')
+      return
+    }
+    if (editForm.respTel && !validatePhone(editForm.respTel)) {
+      setTelEditError('Telefone inválido')
+      return
+    }
+
     setEditLoading(true)
     try {
       const cpfCrianca = editForm.cpf ? editForm.cpf.replace(/\D/g, '') : undefined
@@ -412,6 +427,7 @@ export function Cadastros() {
           nome: editForm.respNome.trim(),
           cpf: cpfResp || undefined,
           telefone: editForm.respTel.trim() || undefined,
+          telefone2: editForm.respTel2.trim() || undefined,
           email: editForm.respEmail.trim() || undefined
         })
       }
@@ -679,8 +695,6 @@ export function Cadastros() {
                     Nome <SortIcon col="nome" />
                   </button>
                 </th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Idade</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">CPF Criança</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Responsável</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">CPF Resp.</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Telefone</th>
@@ -701,7 +715,7 @@ export function Cadastros() {
             <tbody className="divide-y">
               {!loading && sorted.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="text-center py-8 text-muted-foreground">
+                  <td colSpan={9} className="text-center py-8 text-muted-foreground">
                     {searchQuery ? 'Nenhum resultado encontrado' : 'Nenhum cadastro ainda'}
                   </td>
                 </tr>
@@ -717,12 +731,6 @@ export function Cadastros() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-medium">{c.nome}</span>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                      {c.data_nascimento ? `${calcularIdade(c.data_nascimento)} anos` : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {c.cpf ? maskCPF(c.cpf) : '—'}
                     </td>
                     <td className="px-4 py-3">
                       {c.responsavel_nome || <span className="text-muted-foreground">—</span>}
@@ -757,22 +765,8 @@ export function Cadastros() {
                         >
                           <LogIn className="w-4 h-4" />
                         </Button>
-                        {c.responsavel_telefone && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 hover:bg-green-50"
-                            title={`WhatsApp: ${c.responsavel_telefone}`}
-                            onClick={() => {
-                              const digits = c.responsavel_telefone!.replace(/\D/g, '')
-                              const num = digits.startsWith('55') ? digits : `55${digits}`
-                              window.open(`https://wa.me/${num}`)
-                            }}
-                          >
-                            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-[#25D366]" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                            </svg>
-                          </Button>
+                        {(c.responsavel_telefone || c.responsavel_telefone2) && (
+                          <WhatsAppButton tel1={c.responsavel_telefone} tel2={c.responsavel_telefone2} />
                         )}
                         {canDelete && (
                           <Button
@@ -1001,7 +995,10 @@ export function Cadastros() {
                           <p className="text-sm text-muted-foreground">CPF: {maskCPF(detailData.crianca.responsavel_cpf)}</p>
                         )}
                         {detailData.crianca.responsavel_telefone && (
-                          <p className="text-sm text-muted-foreground">Tel: {detailData.crianca.responsavel_telefone}</p>
+                          <p className="text-sm text-muted-foreground">Tel 1: {detailData.crianca.responsavel_telefone}</p>
+                        )}
+                        {(detailData.crianca as any).responsavel_telefone2 && (
+                          <p className="text-sm text-muted-foreground">Tel 2: {(detailData.crianca as any).responsavel_telefone2}</p>
                         )}
                         {detailData.crianca.responsavel_email && (
                           <p className="text-sm text-muted-foreground">Email: {detailData.crianca.responsavel_email}</p>
@@ -1044,7 +1041,16 @@ export function Cadastros() {
                 <p className="text-sm text-muted-foreground text-center py-4">Nenhuma visita registrada</p>
               ) : (
                 <div className="rounded-md border overflow-hidden flex flex-col flex-1 min-h-0">
-                  <table className="w-full text-sm">
+                  {/* Header fixo */}
+                  <table className="w-full text-sm table-fixed">
+                    <colgroup>
+                      <col className="w-[100px]" />
+                      <col className="w-[70px]" />
+                      <col className="w-[70px]" />
+                      <col className="w-[80px]" />
+                      <col className="w-[90px]" />
+                      <col />
+                    </colgroup>
                     <thead className="bg-muted/50 border-b">
                       <tr>
                         <th className="text-left px-3 py-2 font-semibold text-xs uppercase tracking-wide text-muted-foreground">Data</th>
@@ -1056,26 +1062,35 @@ export function Cadastros() {
                       </tr>
                     </thead>
                   </table>
+                  {/* Body com scroll */}
                   <div className="overflow-y-auto flex-1 min-h-0">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm table-fixed">
+                      <colgroup>
+                        <col className="w-[100px]" />
+                        <col className="w-[70px]" />
+                        <col className="w-[70px]" />
+                        <col className="w-[80px]" />
+                        <col className="w-[90px]" />
+                        <col />
+                      </colgroup>
                       <tbody className="divide-y">
                         {detailData.visitas.map((v) => (
                           <tr key={v.id} className="hover:bg-muted/20">
-                            <td className="px-3 py-2 text-muted-foreground">
+                            <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                               {formatDate(v.entrada_em)}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2 whitespace-nowrap">
                               {new Date(v.entrada_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2 whitespace-nowrap">
                               {v.saida_em
                                 ? new Date(v.saida_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-                                : <Badge variant="success" className="text-xs">Em andamento</Badge>}
+                                : <Badge variant="success" className="text-xs">Ativo</Badge>}
                             </td>
-                            <td className="px-3 py-2 text-muted-foreground">
+                            <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                               {v.saida_em ? formatDuracao(v.entrada_em, v.saida_em) : '—'}
                             </td>
-                            <td className="px-3 py-2 text-right font-medium">
+                            <td className="px-3 py-2 text-right font-medium whitespace-nowrap">
                               {v.valor_total != null ? formatCurrency(v.valor_total) : '—'}
                             </td>
                             <td className="px-3 py-2 text-muted-foreground">
@@ -1148,19 +1163,31 @@ export function Cadastros() {
                   <Label>Nome <span className="text-red-500">*</span></Label>
                   <Input value={editForm.respNome} onChange={(e) => setEditForm(f => ({ ...f, respNome: e.target.value }))} />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Telefone <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
-                  <Input
-                    value={editForm.respTel}
-                    onChange={(e) => { setEditForm(f => ({ ...f, respTel: maskPhone(e.target.value) })); setTelEditError('') }}
-                    onBlur={() => {
-                      if (editForm.respTel && !validatePhone(editForm.respTel)) setTelEditError('Telefone inválido')
-                      else setTelEditError('')
-                    }}
-                    placeholder="(00) 00000-0000"
-                    className={telEditError ? 'border-red-400 focus-visible:ring-red-400' : editForm.respTel && validatePhone(editForm.respTel) ? 'border-green-400 focus-visible:ring-green-400' : ''}
-                  />
-                  {telEditError && <p className="text-xs text-red-500">{telEditError}</p>}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Telefone 1 <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={editForm.respTel}
+                      onChange={(e) => { setEditForm(f => ({ ...f, respTel: maskPhone(e.target.value) })); setTelEditError('') }}
+                      onBlur={() => {
+                        if (!editForm.respTel.trim()) setTelEditError('Telefone obrigatório')
+                        else if (!validatePhone(editForm.respTel)) setTelEditError('Telefone inválido')
+                        else setTelEditError('')
+                      }}
+                      placeholder="(00) 00000-0000"
+                      className={telEditError ? 'border-red-400 focus-visible:ring-red-400' : editForm.respTel && validatePhone(editForm.respTel) ? 'border-green-400 focus-visible:ring-green-400' : ''}
+                    />
+                    {telEditError && <p className="text-xs text-red-500">{telEditError}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Telefone 2 <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+                    <Input
+                      value={editForm.respTel2}
+                      onChange={(e) => setEditForm(f => ({ ...f, respTel2: maskPhone(e.target.value) }))}
+                      placeholder="(00) 00000-0000"
+                      className={editForm.respTel2 && validatePhone(editForm.respTel2) ? 'border-green-400 focus-visible:ring-green-400' : ''}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label>CPF <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
@@ -1342,19 +1369,31 @@ export function Cadastros() {
                     </div>
                   )}
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Telefone <span className="text-red-500">*</span></Label>
-                  <Input
-                    value={novaRespTel}
-                    onChange={(e) => { setNovaRespTel(maskPhone(e.target.value)); setNovaRespTelError('') }}
-                    onBlur={() => {
-                      if (novaRespTel && !validatePhone(novaRespTel)) setNovaRespTelError('Telefone inválido')
-                      else setNovaRespTelError('')
-                    }}
-                    placeholder="(00) 00000-0000"
-                    className={novaRespTelError ? 'border-red-400 focus-visible:ring-red-400' : novaRespTel && validatePhone(novaRespTel) ? 'border-green-400 focus-visible:ring-green-400' : ''}
-                  />
-                  {novaRespTelError && <p className="text-xs text-red-500">{novaRespTelError}</p>}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Telefone 1 <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={novaRespTel}
+                      onChange={(e) => { setNovaRespTel(maskPhone(e.target.value)); setNovaRespTelError('') }}
+                      onBlur={() => {
+                        if (!novaRespTel.trim()) setNovaRespTelError('Telefone obrigatório')
+                        else if (!validatePhone(novaRespTel)) setNovaRespTelError('Telefone inválido')
+                        else setNovaRespTelError('')
+                      }}
+                      placeholder="(00) 00000-0000"
+                      className={novaRespTelError ? 'border-red-400 focus-visible:ring-red-400' : novaRespTel && validatePhone(novaRespTel) ? 'border-green-400 focus-visible:ring-green-400' : ''}
+                    />
+                    {novaRespTelError && <p className="text-xs text-red-500">{novaRespTelError}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Telefone 2 <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
+                    <Input
+                      value={novaRespTel2}
+                      onChange={(e) => setNovaRespTel2(maskPhone(e.target.value))}
+                      placeholder="(00) 00000-0000"
+                      className={novaRespTel2 && validatePhone(novaRespTel2) ? 'border-green-400 focus-visible:ring-green-400' : ''}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label>CPF do responsável <span className="text-muted-foreground font-normal text-xs">(opcional)</span></Label>
