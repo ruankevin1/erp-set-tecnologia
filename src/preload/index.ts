@@ -51,6 +51,7 @@ const api = {
     caixaAbertura: (data: any) => ipcRenderer.invoke('printer:caixa-abertura', data),
     caixaFechamento: (data: any) => ipcRenderer.invoke('printer:caixa-fechamento', data),
     test: (interfaceUrl?: string) => ipcRenderer.invoke('printer:test', interfaceUrl),
+    printTest: (interfaceUrl?: string) => ipcRenderer.invoke('printer:print-test', interfaceUrl),
     listUsb: () => ipcRenderer.invoke('printer:list-usb'),
   },
   settings: {

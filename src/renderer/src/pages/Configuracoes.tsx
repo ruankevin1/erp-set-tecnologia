@@ -167,6 +167,7 @@ function ConfiguracoesContent() {
 
   // Impressora
   const [printerType, setPrinterType] = useState<'usb' | 'network'>('network')
+  const [printerBrand, setPrinterBrand] = useState<'epson' | 'daruma'>('epson')
   const [printerIp, setPrinterIp] = useState('192.168.1.100')
   const [printerPort, setPrinterPort] = useState('9100')
   const [printerUsbName, setPrinterUsbName] = useState('')
@@ -174,6 +175,7 @@ function ConfiguracoesContent() {
   const [loadingUsbPrinters, setLoadingUsbPrinters] = useState(false)
   const [printerOk, setPrinterOk] = useState<boolean | null>(null)
   const [printerLoading, setPrinterLoading] = useState(false)
+  const [printTestLoading, setPrintTestLoading] = useState(false)
   const [savingPrinter, setSavingPrinter] = useState(false)
 
   // Personalização do ticket
@@ -282,6 +284,7 @@ function ConfiguracoesContent() {
 
     const pt = (all['printer_type'] ?? 'network') as 'usb' | 'network'
     setPrinterType(pt)
+    setPrinterBrand((all['printer_brand'] ?? 'epson') as 'epson' | 'daruma')
     setPrinterIp(all['printer_ip'] ?? '192.168.1.100')
     setPrinterPort(all['printer_port'] ?? '9100')
     setPrinterUsbName(all['printer_usb_name'] ?? '')
@@ -372,6 +375,7 @@ function ConfiguracoesContent() {
         ? `tcp://${printerIp.trim()}:${printerPort.trim()}`
         : `printer:${printerUsbName}`
       await window.api.settings.set('printer_type', printerType)
+      await window.api.settings.set('printer_brand', printerBrand)
       await window.api.settings.set('printer_ip', printerIp.trim())
       await window.api.settings.set('printer_port', printerPort.trim())
       await window.api.settings.set('printer_usb_name', printerUsbName)
@@ -423,6 +427,20 @@ function ConfiguracoesContent() {
       toast({ title: 'Impressora não encontrada', description: res.error, variant: 'destructive' })
     }
     setPrinterLoading(false)
+  }
+
+  async function imprimirTeste() {
+    setPrintTestLoading(true)
+    const iface = printerType === 'network'
+      ? `tcp://${printerIp.trim()}:${printerPort.trim()}`
+      : `printer:${printerUsbName}`
+    const res = await window.api.printer.printTest(iface)
+    if (res.success) {
+      toast({ title: 'Página de teste impressa!' })
+    } else {
+      toast({ title: 'Falha na impressão', description: res.error, variant: 'destructive' })
+    }
+    setPrintTestLoading(false)
   }
 
   async function visualizarPreview() {
@@ -849,26 +867,50 @@ function ConfiguracoesContent() {
           <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.impressora ? 'rotate-180' : '')} />
         </CardHeader>
         {secoesAbertas.impressora && <CardContent className="space-y-4">
+          {/* Marca da impressora */}
+          <div className="space-y-1.5">
+            <Label>Marca / protocolo</Label>
+            <div className="flex gap-2">
+              <Button
+                variant={printerBrand === 'epson' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => { setPrinterBrand('epson'); setPrinterOk(null) }}
+              >
+                Epson / Bematech / Genérica
+              </Button>
+              <Button
+                variant={printerBrand === 'daruma' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => { setPrinterBrand('daruma'); setPrinterOk(null) }}
+              >
+                Daruma
+              </Button>
+            </div>
+          </div>
+
           {/* Seletor USB / Rede */}
-          <div className="flex gap-2">
-            <Button
-              variant={printerType === 'network' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => { setPrinterType('network'); setPrinterOk(null) }}
-              className="gap-1.5"
-            >
-              <Wifi className="w-3.5 h-3.5" />
-              Rede (TCP/IP)
-            </Button>
-            <Button
-              variant={printerType === 'usb' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => { setPrinterType('usb'); setPrinterOk(null) }}
-              className="gap-1.5"
-            >
-              <Usb className="w-3.5 h-3.5" />
-              USB
-            </Button>
+          <div className="space-y-1.5">
+            <Label>Conexão</Label>
+            <div className="flex gap-2">
+              <Button
+                variant={printerType === 'network' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => { setPrinterType('network'); setPrinterOk(null) }}
+                className="gap-1.5"
+              >
+                <Wifi className="w-3.5 h-3.5" />
+                Rede (TCP/IP)
+              </Button>
+              <Button
+                variant={printerType === 'usb' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => { setPrinterType('usb'); setPrinterOk(null) }}
+                className="gap-1.5"
+              >
+                <Usb className="w-3.5 h-3.5" />
+                USB
+              </Button>
+            </div>
           </div>
 
           {/* Rede */}
@@ -936,6 +978,10 @@ function ConfiguracoesContent() {
             <Button variant="outline" onClick={testarImpressora} disabled={printerLoading || (printerType === 'usb' && !printerUsbName)}>
               <Printer className="w-4 h-4 mr-2" />
               {printerLoading ? 'Testando...' : 'Testar conexão'}
+            </Button>
+            <Button variant="outline" onClick={imprimirTeste} disabled={printTestLoading || (printerType === 'usb' && !printerUsbName)}>
+              <Printer className="w-4 h-4 mr-2" />
+              {printTestLoading ? 'Imprimindo...' : 'Imprimir teste'}
             </Button>
             <Button onClick={salvarImpressora} disabled={savingPrinter}>
               <Save className="w-4 h-4 mr-2" />

@@ -528,6 +528,45 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     }
   })
 
+  ipcMain.handle('printer:print-test', async (_event, interfaceUrl?: string) => {
+    const iface = interfaceUrl || getIface(db)
+    const s = getSettings(db)
+    try {
+      const brand = getPrinterBrand(db)
+      const printer = makePrinter(iface, brand)
+      const connected = await isConnected(printer, iface)
+      if (!connected) return { success: false, error: 'Impressora não conectada' }
+
+      printer.alignCenter()
+      printer.bold(true)
+      printer.setTextSize(1, 1)
+      printer.println(s.nome.toUpperCase())
+      printer.setTextNormal()
+      printer.bold(false)
+      printer.drawLine()
+      printer.println('IMPRESSAO DE TESTE')
+      printer.println(new Date().toLocaleString('pt-BR'))
+      printer.drawLine()
+      printer.alignLeft()
+      printer.println('Texto normal')
+      printer.bold(true)
+      printer.println('Texto negrito')
+      printer.bold(false)
+      printer.println('Acentuacao: a e i o u')
+      printer.println('Especiais: a o u c A E I O U')
+      printer.drawLine()
+      printer.alignCenter()
+      printer.println('Impressora OK!')
+      printer.drawLine()
+      printer.cut()
+
+      await executePrint(printer, iface)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
   ipcMain.handle('printer:ticket-grupo', async (_event, data: {
     responsavelNome?: string
     saidaEm: string
