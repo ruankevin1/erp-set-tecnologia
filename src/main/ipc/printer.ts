@@ -116,6 +116,11 @@ function getSettings(db: Database.Database): TicketSettings {
   }
 }
 
+function getPrinterBrand(db: Database.Database): string {
+  const r = db.prepare("SELECT valor FROM configuracoes_sistema WHERE chave = 'printer_brand'").get() as any
+  return r?.valor ?? 'epson'
+}
+
 function getPricing(db: Database.Database, estabId: string): ConfigPreco[] {
   return db.prepare(
     'SELECT * FROM configuracoes_preco WHERE estabelecimento_id = ? AND ativo = 1 ORDER BY idade_min'
@@ -274,12 +279,14 @@ function buildSaidaText(
   return lines.join('\n')
 }
 
-function makePrinter(iface: string): ThermalPrinter {
+function makePrinter(iface: string, brand = 'epson'): ThermalPrinter {
   const effectiveIface = iface.startsWith('printer:') ? 'tcp://127.0.0.1:9100' : iface
+  // Daruma DR800 suporta ESC/POS padrão — usar EPSON para compatibilidade
+  // A diferença está apenas no character set para acentuação correta
   return new ThermalPrinter({
     type: PrinterTypes.EPSON,
     interface: effectiveIface,
-    characterSet: CharacterSet.PC850_MULTILINGUAL,
+    characterSet: brand === 'daruma' ? CharacterSet.PC860_PORTUGUESE : CharacterSet.PC850_MULTILINGUAL,
     removeSpecialCharacters: false,
     lineCharacter: '-',
     options: { timeout: 5000 }
@@ -395,7 +402,8 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
 
     try {
       const iface = getIface(db)
-      const printer = makePrinter(iface)
+      const brand = getPrinterBrand(db)
+      const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
 
@@ -452,7 +460,8 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
 
     try {
       const iface = getIface(db)
-      const printer = makePrinter(iface)
+      const brand = getPrinterBrand(db)
+      const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
 
@@ -510,7 +519,8 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
   ipcMain.handle('printer:test', async (_event, interfaceUrl?: string) => {
     const iface = interfaceUrl || getIface(db)
     try {
-      const printer = makePrinter(iface)
+      const brand = getPrinterBrand(db)
+      const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       return { success: connected }
     } catch (err: any) {
@@ -562,7 +572,8 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
 
     try {
       const iface = getIface(db)
-      const printer = makePrinter(iface)
+      const brand = getPrinterBrand(db)
+      const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
 
@@ -629,7 +640,8 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
 
     try {
       const iface = getIface(db)
-      const printer = makePrinter(iface)
+      const brand = getPrinterBrand(db)
+      const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
 
@@ -728,7 +740,8 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
 
     try {
       const iface = getIface(db)
-      const printer = makePrinter(iface)
+      const brand = getPrinterBrand(db)
+      const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
 
