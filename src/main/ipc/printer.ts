@@ -306,44 +306,42 @@ async function isConnected(printer: ThermalPrinter, iface: string): Promise<bool
   return printer.isPrinterConnected()
 }
 
-async function sendRawToWindowsPrinter(printerName: string, data: Buffer): Promise<void> {
-  const tmpBin = path.join(os.tmpdir(), `pos_${Date.now()}.bin`)
-  await fs.promises.writeFile(tmpBin, data)
+async function sendGdiTextToWindowsPrinter(printerName: string, text: string): Promise<void> {
+  const tmpTxt = path.join(os.tmpdir(), `receipt_${Date.now()}.txt`)
+  await fs.promises.writeFile(tmpTxt, text, 'utf8')
 
-  const escapedBin = tmpBin.replace(/\\/g, '\\\\')
+  const escapedTxt = tmpTxt.replace(/\\/g, '\\\\')
+  const escapedPrinter = printerName.replace(/"/g, '\\"')
+
   const ps = [
-    `$bytes = [System.IO.File]::ReadAllBytes("${escapedBin}")`,
-    'Add-Type -TypeDefinition @"',
-    'using System;',
-    'using System.Runtime.InteropServices;',
-    'public class RawPrint {',
-    '  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]',
-    '  public class DOCINFOA { public string pDocName; public string pOutputFile; public string pDataType; }',
-    '  [DllImport("winspool.Drv")] public static extern bool OpenPrinter(string n, out IntPtr h, IntPtr p);',
-    '  [DllImport("winspool.Drv")] public static extern bool ClosePrinter(IntPtr h);',
-    '  [DllImport("winspool.Drv")] public static extern int StartDocPrinter(IntPtr h, int l, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFOA d);',
-    '  [DllImport("winspool.Drv")] public static extern bool EndDocPrinter(IntPtr h);',
-    '  [DllImport("winspool.Drv")] public static extern bool StartPagePrinter(IntPtr h);',
-    '  [DllImport("winspool.Drv")] public static extern bool EndPagePrinter(IntPtr h);',
-    '  [DllImport("winspool.Drv")] public static extern bool WritePrinter(IntPtr h, IntPtr p, int c, out int w);',
-    '}',
-    '"@',
-    '$h = [IntPtr]::Zero',
-    `[RawPrint]::OpenPrinter("${printerName}", [ref]$h, [IntPtr]::Zero) | Out-Null`,
-    '$di = New-Object RawPrint+DOCINFOA; $di.pDocName = "RAW"; $di.pDataType = "RAW"',
-    '[RawPrint]::StartDocPrinter($h, 1, $di) | Out-Null',
-    '[RawPrint]::StartPagePrinter($h) | Out-Null',
-    '$ptr = [System.Runtime.InteropServices.Marshal]::AllocCoTaskMem($bytes.Length)',
-    '[System.Runtime.InteropServices.Marshal]::Copy($bytes, 0, $ptr, $bytes.Length)',
-    '$written = 0',
-    '[RawPrint]::WritePrinter($h, $ptr, $bytes.Length, [ref]$written) | Out-Null',
-    '[System.Runtime.InteropServices.Marshal]::FreeCoTaskMem($ptr)',
-    '[RawPrint]::EndPagePrinter($h) | Out-Null',
-    '[RawPrint]::EndDocPrinter($h) | Out-Null',
-    '[RawPrint]::ClosePrinter($h) | Out-Null',
-    `Remove-Item "${escapedBin}" -Force -ErrorAction SilentlyContinue`,
+    'Add-Type -AssemblyName System.Drawing',
+    `$lines = [System.IO.File]::ReadAllLines("${escapedTxt}", [System.Text.Encoding]::UTF8)`,
+    '$script:li = 0',
+    '$doc = New-Object System.Drawing.Printing.PrintDocument',
+    `$doc.PrinterSettings.PrinterName = "${escapedPrinter}"`,
+    '$doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(10,10,10,10)',
+    '$doc.add_PrintPage({',
+    '  param($s,$e)',
+    '  $font = New-Object System.Drawing.Font("Courier New", 8)',
+    '  $brush = [System.Drawing.Brushes]::Black',
+    '  $y = [float]0',
+    '  $lh = [float]($font.GetHeight($e.Graphics) + 1)',
+    '  while ($script:li -lt $lines.Count) {',
+    '    $e.Graphics.DrawString($lines[$script:li], $font, $brush, [float]0, $y)',
+    '    $y += $lh',
+    '    $script:li++',
+    '    if (($y + $lh) -gt $e.MarginBounds.Height) {',
+    '      $e.HasMorePages = ($script:li -lt $lines.Count)',
+    '      break',
+    '    }',
+    '  }',
+    '  $font.Dispose()',
+    '})',
+    'try { $doc.Print() } finally { $doc.Dispose() }',
+    `Remove-Item "${escapedTxt}" -Force -ErrorAction SilentlyContinue`,
   ].join('\n')
-  const tmpPs = path.join(os.tmpdir(), `pos_${Date.now()}.ps1`)
+
+  const tmpPs = path.join(os.tmpdir(), `gdi_${Date.now()}.ps1`)
   await fs.promises.writeFile(tmpPs, ps, 'utf8')
 
   return new Promise((resolve, reject) => {
@@ -355,11 +353,17 @@ async function sendRawToWindowsPrinter(printerName: string, data: Buffer): Promi
   })
 }
 
-async function executePrint(printer: ThermalPrinter, iface: string): Promise<void> {
+async function executePrint(printer: ThermalPrinter, iface: string, brand?: string, plainText?: string): Promise<void> {
   if (iface.startsWith('printer:')) {
     const name = iface.replace('printer:', '')
-    const buf: Buffer = (printer as any).getBuffer()
-    await sendRawToWindowsPrinter(name, buf)
+    // Daruma e outros drivers Windows usam GDI — não aceitam RAW ESC/POS
+    if (brand === 'daruma' && plainText) {
+      await sendGdiTextToWindowsPrinter(name, plainText)
+    } else {
+      // Impressoras genéricas via spooler: tenta RAW ESC/POS
+      const buf: Buffer = (printer as any).getBuffer()
+      await sendGdiTextToWindowsPrinter(name, buf.toString('latin1'))
+    }
   } else {
     await printer.execute()
   }
@@ -433,7 +437,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       }
 
       printFooter(printer, s)
-      await executePrint(printer, iface)
+      await executePrint(printer, iface, brand, preview)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -509,7 +513,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       if (data.formaPagamento) printer.println(`Pgto: ${data.formaPagamento}`)
 
       printFooter(printer, s)
-      await executePrint(printer, iface)
+      await executePrint(printer, iface, brand, preview)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -531,6 +535,22 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
   ipcMain.handle('printer:print-test', async (_event, interfaceUrl?: string) => {
     const iface = interfaceUrl || getIface(db)
     const s = getSettings(db)
+    const now = new Date().toLocaleString('pt-BR')
+    const preview = [
+      HR(),
+      center(s.nome.toUpperCase()),
+      HR(),
+      center('IMPRESSAO DE TESTE'),
+      center(now),
+      hr(),
+      'Texto normal',
+      'Acentuacao: a e i o u',
+      'Especiais: a o u c A E I O U',
+      hr(),
+      center('Impressora OK!'),
+      HR(),
+    ].join('\n')
+
     try {
       const brand = getPrinterBrand(db)
       const printer = makePrinter(iface, brand)
@@ -545,13 +565,10 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       printer.bold(false)
       printer.drawLine()
       printer.println('IMPRESSAO DE TESTE')
-      printer.println(new Date().toLocaleString('pt-BR'))
+      printer.println(now)
       printer.drawLine()
       printer.alignLeft()
       printer.println('Texto normal')
-      printer.bold(true)
-      printer.println('Texto negrito')
-      printer.bold(false)
       printer.println('Acentuacao: a e i o u')
       printer.println('Especiais: a o u c A E I O U')
       printer.drawLine()
@@ -560,7 +577,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       printer.drawLine()
       printer.cut()
 
-      await executePrint(printer, iface)
+      await executePrint(printer, iface, brand, preview)
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.message }
@@ -646,7 +663,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
         printer.println(`FORMA: ${data.formaPagamento.toUpperCase()}`)
       }
       printFooter(printer, s)
-      await executePrint(printer, iface)
+      await executePrint(printer, iface, brand, preview)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -693,7 +710,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       printer.println(`Operador: ${data.operador_nome}`)
       printer.println(col('Suprimento inicial:', brlPad(data.suprimento_inicial)))
       printFooter(printer, s)
-      await executePrint(printer, iface)
+      await executePrint(printer, iface, brand, preview)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -835,7 +852,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       printer.println(col('Total esperado:', brlPad(totalEsperado)))
       printer.bold(false)
       printFooter(printer, s)
-      await executePrint(printer, iface)
+      await executePrint(printer, iface, brand, preview)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
