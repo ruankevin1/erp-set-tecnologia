@@ -175,9 +175,7 @@ export async function pushToSupabase(
 
       const activeQuery = SOFT_DELETE_TABLES.has(table)
         ? `SELECT * FROM ${table} WHERE sincronizado = 0 AND deletado_em IS NULL`
-        : table === 'operadores'
-          ? `SELECT * FROM ${table} WHERE sincronizado = 0 AND master = 0`
-          : `SELECT * FROM ${table} WHERE sincronizado = 0`
+        : `SELECT * FROM ${table} WHERE sincronizado = 0`
       const rows = db.prepare(activeQuery).all() as any[]
       if (rows.length === 0) continue
 
