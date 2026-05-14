@@ -86,7 +86,7 @@ function buildScheduleLines(dt: Date, config: ConfigPreco): string[] {
     : h > 0
       ? `${h === 1 ? '1 HORA' : `${h} HORAS`} E ${m} MINUTOS`
       : `${config.franquia_minutos} MINUTOS`
-  const acresceText = `A PARTIR DE ${franquiaLonga} ACRESCE ${brl(config.valor_bloco)} A CADA ${config.minutos_por_bloco} MINUTOS`
+  const acresceText = `APOS ${franquiaLonga}: +${brl(config.valor_bloco)}/CADA ${config.minutos_por_bloco}MIN`
   const words = acresceText.split(' ')
   let line = ''
   for (const word of words) {
@@ -306,6 +306,10 @@ async function isConnected(printer: ThermalPrinter, iface: string): Promise<bool
   return printer.isPrinterConnected()
 }
 
+// GDI para Daruma DR800 Spooler (driver GDI — não aceita RAW ESC/POS).
+// Renderiza texto num bitmap em memória, detecta se o driver espelha (ScaleX < 0),
+// pré-inverte o bitmap se necessário → driver espelha de volta → saída correta.
+// Epson/Bematech/TCP não usam esta função.
 async function sendGdiTextToWindowsPrinter(printerName: string, text: string): Promise<void> {
   const tmpTxt = path.join(os.tmpdir(), `receipt_${Date.now()}.txt`)
   await fs.promises.writeFile(tmpTxt, text, 'utf8')
@@ -316,28 +320,41 @@ async function sendGdiTextToWindowsPrinter(printerName: string, text: string): P
   const ps = [
     'Add-Type -AssemblyName System.Drawing',
     `$lines = [System.IO.File]::ReadAllLines("${escapedTxt}", [System.Text.Encoding]::UTF8)`,
-    '$script:li = 0',
     '$doc = New-Object System.Drawing.Printing.PrintDocument',
     `$doc.PrinterSettings.PrinterName = "${escapedPrinter}"`,
-    '$doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(10,10,10,10)',
+    '$doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0,0,0,0)',
     '$doc.add_PrintPage({',
     '  param($s,$e)',
-    '  $font = New-Object System.Drawing.Font("Courier New", 8)',
+    '  $font = New-Object System.Drawing.Font("Courier New", 9, [System.Drawing.FontStyle]::Bold)',
+    '  $lh   = [float]($font.GetHeight($e.Graphics) + 2)',
+    '  $bmpW = [int][Math]::Max([int]$e.Graphics.VisibleClipBounds.Width, 100)',
+    '  $bmpH = [int][Math]::Max($lh * $lines.Count + 20, 50)',
+    '',
+    '  # Renderiza texto no bitmap sem qualquer transformacao do driver',
+    '  $bmp = New-Object System.Drawing.Bitmap($bmpW, $bmpH)',
+    '  $g2  = [System.Drawing.Graphics]::FromImage($bmp)',
+    '  $g2.Clear([System.Drawing.Color]::White)',
+    '  $g2.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::SingleBitPerPixelGridFit',
     '  $brush = [System.Drawing.Brushes]::Black',
-    '  $y = [float]0',
-    '  $lh = [float]($font.GetHeight($e.Graphics) + 1)',
-    '  while ($script:li -lt $lines.Count) {',
-    '    $e.Graphics.DrawString($lines[$script:li], $font, $brush, [float]0, $y)',
-    '    $y += $lh',
-    '    $script:li++',
-    '    if (($y + $lh) -gt $e.MarginBounds.Height) {',
-    '      $e.HasMorePages = ($script:li -lt $lines.Count)',
-    '      break',
-    '    }',
+    '  $y2 = [float]0',
+    '  foreach ($line in $lines) {',
+    '    $g2.DrawString($line, $font, $brush, [float]0, $y2)',
+    '    $y2 += $lh',
     '  }',
+    '  $g2.Dispose()',
+    '',
+    '  # Se o driver espelha (ScaleX < 0), pre-inverte o bitmap',
+    '  # O driver vai espelhar de volta -> resultado correto',
+    '  $elems = $e.Graphics.Transform.Elements',
+    '  if ($elems[0] -lt 0) {',
+    '    $bmp.RotateFlip([System.Drawing.RotateFlipType]::RotateNoneFlipX)',
+    '  }',
+    '',
+    '  $e.Graphics.DrawImage($bmp, [float]0, [float]0)',
+    '  $bmp.Dispose()',
     '  $font.Dispose()',
     '})',
-    'try { $doc.Print() } finally { $doc.Dispose() }',
+    'try { $doc.Print() } catch { Write-Error $_.Exception.Message; exit 1 } finally { $doc.Dispose() }',
     `Remove-Item "${escapedTxt}" -Force -ErrorAction SilentlyContinue`,
   ].join('\n')
 
@@ -345,10 +362,73 @@ async function sendGdiTextToWindowsPrinter(printerName: string, text: string): P
   await fs.promises.writeFile(tmpPs, ps, 'utf8')
 
   return new Promise((resolve, reject) => {
-    exec(`powershell.exe -ExecutionPolicy Bypass -File "${tmpPs}"`, (err) => {
+    exec(`powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NonInteractive -File "${tmpPs}"`, (err, _stdout, stderr) => {
       fs.promises.unlink(tmpPs).catch(() => {})
-      if (err) reject(err)
+      if (err) reject(new Error(stderr || err.message))
       else resolve()
+    })
+  })
+}
+
+// Envia bytes ESC/POS direto pro spooler Windows via Win32 RAW API
+// Para drivers que aceitam RAW (Epson, Bematech) — NÃO funciona com drivers GDI como Daruma Spooler
+async function sendRawToWindowsPrinter(printerName: string, data: Buffer): Promise<void> {
+  const tmpBin = path.join(os.tmpdir(), `receipt_${Date.now()}.bin`)
+  await fs.promises.writeFile(tmpBin, data)
+
+  const escapedBin = tmpBin.replace(/\\/g, '\\\\')
+  const escapedPrinter = printerName.replace(/'/g, "''").replace(/"/g, '\\"')
+
+  const ps = `
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class RawPrint {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
+  public class DOCINFOA {
+    public string pDocName = "Receipt";
+    public string pOutputFile = null;
+    public string pDataType = "RAW";
+  }
+  [DllImport("winspool.drv", CharSet=CharSet.Ansi)] public static extern bool OpenPrinter(string n, out IntPtr h, IntPtr d);
+  [DllImport("winspool.drv")] public static extern bool ClosePrinter(IntPtr h);
+  [DllImport("winspool.drv")] public static extern bool StartDocPrinter(IntPtr h, int lv, [In] DOCINFOA di);
+  [DllImport("winspool.drv")] public static extern bool EndDocPrinter(IntPtr h);
+  [DllImport("winspool.drv")] public static extern bool StartPagePrinter(IntPtr h);
+  [DllImport("winspool.drv")] public static extern bool EndPagePrinter(IntPtr h);
+  [DllImport("winspool.drv")] public static extern bool WritePrinter(IntPtr h, byte[] b, int cb, out int written);
+  public static bool Print(string printerName, byte[] data) {
+    IntPtr hPrinter;
+    if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) return false;
+    StartDocPrinter(hPrinter, 1, new DOCINFOA());
+    StartPagePrinter(hPrinter);
+    int written;
+    WritePrinter(hPrinter, data, data.Length, out written);
+    EndPagePrinter(hPrinter);
+    EndDocPrinter(hPrinter);
+    ClosePrinter(hPrinter);
+    return true;
+  }
+}
+"@ -Language CSharp
+\$bytes = [System.IO.File]::ReadAllBytes("${escapedBin}")
+\$ok = [RawPrint]::Print("${escapedPrinter}", \$bytes)
+Remove-Item "${escapedBin}" -Force -ErrorAction SilentlyContinue
+if (-not \$ok) { throw "Falha ao abrir impressora: ${escapedPrinter}" }
+`
+
+  const tmpPs = path.join(os.tmpdir(), `rawprint_${Date.now()}.ps1`)
+  await fs.promises.writeFile(tmpPs, ps, 'utf8')
+
+  return new Promise((resolve, reject) => {
+    exec(`powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NonInteractive -File "${tmpPs}"`, (err, _stdout, stderr) => {
+      fs.promises.unlink(tmpPs).catch(() => {})
+      if (err) {
+        console.error('[rawprint] stderr:', stderr)
+        reject(new Error(stderr || err.message))
+      } else {
+        resolve()
+      }
     })
   })
 }
@@ -356,15 +436,18 @@ async function sendGdiTextToWindowsPrinter(printerName: string, text: string): P
 async function executePrint(printer: ThermalPrinter, iface: string, brand?: string, plainText?: string): Promise<void> {
   if (iface.startsWith('printer:')) {
     const name = iface.replace('printer:', '')
-    // Daruma e outros drivers Windows usam GDI — não aceitam RAW ESC/POS
-    if (brand === 'daruma' && plainText) {
-      await sendGdiTextToWindowsPrinter(name, plainText)
+    if (brand === 'daruma') {
+      // Daruma DR800 Spooler é driver GDI — não aceita RAW ESC/POS.
+      // Usa GDI com PageUnit=Millimeter para evitar problemas de transformação/espelhamento do driver.
+      const text = plainText ?? ''
+      await sendGdiTextToWindowsPrinter(name, text)
     } else {
-      // Impressoras genéricas via spooler: tenta RAW ESC/POS
+      // Outros drivers Windows (Epson, Bematech) — tenta RAW ESC/POS via Win32
       const buf: Buffer = (printer as any).getBuffer()
-      await sendGdiTextToWindowsPrinter(name, buf.toString('latin1'))
+      await sendRawToWindowsPrinter(name, buf)
     }
   } else {
+    // TCP / USB direto — ESC/POS padrão
     await printer.execute()
   }
 }
