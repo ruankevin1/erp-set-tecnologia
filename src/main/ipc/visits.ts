@@ -36,7 +36,7 @@ function calcularValor(minutos: number, config: ConfiguracaoPreco): number {
 
   const extra = minutos - config.franquia_minutos
   if (extra <= 0) return valorAntesDosBlocos
-  const blocos = Math.ceil(extra / config.minutos_por_bloco)
+  const blocos = Math.floor(extra / config.minutos_por_bloco)
   return valorAntesDosBlocos + blocos * config.valor_bloco
 }
 
@@ -230,45 +230,66 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
     visitaIds: string[]
     estabelecimentoId: string
     formaPagamento?: string
+    desconto?: { tipo: 'percentual' | 'fixo'; valor: number; motivo: string }
   }) => {
     const saidaEm = new Date().toISOString()
+    const desc = data.desconto && data.desconto.valor > 0 ? data.desconto : undefined
+
+    // Primeira passagem: calcular valores brutos para distribuir desconto fixo proporcionalmente
+    const dadosBrutos: { visitaId: string; visita: any; minutos: number; valorBruto: number; config?: ConfiguracaoPreco }[] = []
+    for (const visitaId of data.visitaIds) {
+      const visita = db.prepare('SELECT * FROM visitas WHERE id = ?').get(visitaId) as any
+      if (!visita) continue
+      const entrada = new Date(visita.entrada_em)
+      const saida = new Date(saidaEm)
+      const pausas: { inicio: string; fim: string | null }[] = JSON.parse(visita.pausas || '[]')
+      const pausadoMs = pausas.reduce((acc, p) => {
+        const pInicio = new Date(p.inicio).getTime()
+        const pFim = p.fim ? new Date(p.fim).getTime() : saida.getTime()
+        return acc + (pFim - pInicio)
+      }, 0)
+      const minutos = Math.max(0, Math.ceil((saida.getTime() - entrada.getTime() - pausadoMs) / 60000))
+      let config: ConfiguracaoPreco | undefined
+      if (visita.configuracao_preco_snapshot) {
+        try { config = JSON.parse(visita.configuracao_preco_snapshot) } catch { /* fall through */ }
+      }
+      if (!config) config = selecionarConfig(db, data.estabelecimentoId, visita.crianca_id)
+      const valorBruto = config ? calcularValor(minutos, config) : 0
+      dadosBrutos.push({ visitaId, visita, minutos, valorBruto, config })
+    }
+
+    const totalBruto = dadosBrutos.reduce((s, d) => s + d.valorBruto, 0)
     const resultados: any[] = []
 
     const checkoutGroup = db.transaction(() => {
-      for (const visitaId of data.visitaIds) {
-        const visita = db.prepare('SELECT * FROM visitas WHERE id = ?').get(visitaId) as any
-        if (!visita) continue
+      for (let i = 0; i < dadosBrutos.length; i++) {
+        const { visitaId, visita, minutos, valorBruto, config } = dadosBrutos[i]
 
-        const entrada = new Date(visita.entrada_em)
-        const saida = new Date(saidaEm)
-
-        const pausasGrupo: { inicio: string; fim: string | null }[] = JSON.parse(visita.pausas || '[]')
-        const pausadoMsGrupo = pausasGrupo.reduce((acc, p) => {
-          const pInicio = new Date(p.inicio).getTime()
-          const pFim = p.fim ? new Date(p.fim).getTime() : saida.getTime()
-          return acc + (pFim - pInicio)
-        }, 0)
-        const minutosTotais = Math.max(0, Math.ceil((saida.getTime() - entrada.getTime() - pausadoMsGrupo) / 60000))
-
-        let configuracaoAplicada: ConfiguracaoPreco | undefined
-        if (visita.configuracao_preco_snapshot) {
-          try { configuracaoAplicada = JSON.parse(visita.configuracao_preco_snapshot) } catch { /* fall through */ }
+        // Aplica desconto proporcional: percentual igual pra todos, fixo proporcional ao valor
+        let valorFinal = valorBruto
+        if (desc) {
+          if (desc.tipo === 'percentual') {
+            valorFinal = valorBruto * (1 - desc.valor / 100)
+          } else {
+            // Desconto fixo: distribui proporcionalmente; último absorve arredondamento
+            const proporcao = totalBruto > 0 ? valorBruto / totalBruto : 1 / dadosBrutos.length
+            const descontoItem = i < dadosBrutos.length - 1
+              ? Math.round(desc.valor * proporcao * 100) / 100
+              : desc.valor - resultados.reduce((s, r) => s + ((r.valor_original ?? r.valor_total) - r.valor_total), 0)
+            valorFinal = Math.max(0, valorBruto - descontoItem)
+          }
+          valorFinal = Math.round(valorFinal * 100) / 100
         }
-        if (!configuracaoAplicada) {
-          configuracaoAplicada = selecionarConfig(db, data.estabelecimentoId, visita.crianca_id)
-        }
-
-        const valor = configuracaoAplicada ? calcularValor(minutosTotais, configuracaoAplicada) : 0
 
         db.prepare(`
-          UPDATE visitas SET saida_em = ?, valor_total = ?, forma_pagamento = ?, status = 'finalizada', sincronizado = 0 WHERE id = ?
-        `).run(saidaEm, valor, data.formaPagamento ?? null, visitaId)
+          UPDATE visitas SET saida_em = ?, valor_total = ?, valor_original = ?, desconto_tipo = ?, desconto_valor = ?, motivo_desconto = ?, forma_pagamento = ?, status = 'finalizada', sincronizado = 0 WHERE id = ?
+        `).run(saidaEm, valorFinal, valorBruto, desc?.tipo ?? null, desc?.valor ?? null, desc?.motivo ?? null, data.formaPagamento ?? null, visitaId)
 
-        if (configuracaoAplicada) {
+        if (config) {
           db.prepare(`
             INSERT INTO visita_faixas_aplicadas (id, visita_id, configuracao_preco_id, minutos, valor)
             VALUES (?, ?, ?, ?, ?)
-          `).run(randomUUID(), visitaId, configuracaoAplicada.id, minutosTotais, valor)
+          `).run(randomUUID(), visitaId, config.id, minutos, valorFinal)
         }
 
         resultados.push({
@@ -276,8 +297,9 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
           crianca_id: visita.crianca_id,
           entrada_em: visita.entrada_em,
           saida_em: saidaEm,
-          minutos: minutosTotais,
-          valor_total: valor,
+          minutos,
+          valor_total: valorFinal,
+          valor_original: valorBruto,
           ticket_numero: visita.ticket_numero ?? undefined,
           forma_pagamento: data.formaPagamento
         })
@@ -288,7 +310,14 @@ export function registerVisitsHandlers(ipcMain: IpcMain, db: Database.Database):
     triggerSync()
 
     const valorTotalGrupo = resultados.reduce((s, r) => s + r.valor_total, 0)
-    return { resultados, valor_total_grupo: valorTotalGrupo, forma_pagamento: data.formaPagamento }
+    const valorOriginalGrupo = resultados.reduce((s, r) => s + (r.valor_original ?? r.valor_total), 0)
+    return {
+      resultados,
+      valor_total_grupo: valorTotalGrupo,
+      valor_original_grupo: valorOriginalGrupo,
+      desconto: desc,
+      forma_pagamento: data.formaPagamento
+    }
   })
 
   ipcMain.handle('visits:preview-price', (_event, visitaId: string) => {

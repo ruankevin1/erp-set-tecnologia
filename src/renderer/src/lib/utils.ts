@@ -89,7 +89,7 @@ export function calcularValorAtual(minutos: number, config: {
   const base = faixas.length > 0 ? faixas[faixas.length - 1].valor : config.valor_base
   const extra = minutos - config.franquia_minutos
   if (extra <= 0) return base
-  const blocos = Math.ceil(extra / config.minutos_por_bloco)
+  const blocos = Math.floor(extra / config.minutos_por_bloco)
   return base + blocos * config.valor_bloco
 }
 
@@ -155,8 +155,8 @@ export function calcularProximoAcrescimo(
 
   if (minutos > config.franquia_minutos) {
     const extra = minutos - config.franquia_minutos
-    const currentBlocos = Math.ceil(extra / config.minutos_por_bloco)
-    const nextChange = config.franquia_minutos + currentBlocos * config.minutos_por_bloco + 1
+    const currentBlocos = Math.floor(extra / config.minutos_por_bloco)
+    const nextChange = config.franquia_minutos + (currentBlocos + 1) * config.minutos_por_bloco
     return { minutos_restantes: nextChange - minutos, modo_bloco: true }
   }
 
@@ -165,7 +165,12 @@ export function calcularProximoAcrescimo(
     nextChange = config.minutos_base + 1
   } else {
     const prox = faixas.find(f => minutos <= f.ate_minutos)
-    nextChange = prox ? prox.ate_minutos + 1 : config.franquia_minutos + 1
+    if (prox && prox.ate_minutos === config.franquia_minutos) {
+      // Última faixa: próximo acréscimo só após bloco completo
+      nextChange = config.franquia_minutos + config.minutos_por_bloco
+    } else {
+      nextChange = prox ? prox.ate_minutos + 1 : config.franquia_minutos + config.minutos_por_bloco
+    }
   }
 
   const rest = nextChange - minutos
