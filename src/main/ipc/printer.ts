@@ -76,15 +76,17 @@ function formatDuration(minutes: number): string {
   return `${h}h${m}min`
 }
 
-function buildScheduleLines(_dt: Date, config: ConfigPreco, w = W): string[] {
+function buildScheduleLines(dt: Date, config: ConfigPreco, w = W): string[] {
   const lines: string[] = []
   const faixas: FaixaIntermediaria[] = JSON.parse(config.faixas_intermediarias || '[]')
   faixas.sort((a, b) => a.ate_minutos - b.ate_minutos)
 
-  lines.push(col(`Até ${formatDuration(config.minutos_base)}:`, brl(config.valor_base), w))
+  const horario = (min: number) => addMinStr(dt, min)
+
+  lines.push(col(`Até ${horario(config.minutos_base)} (${formatDuration(config.minutos_base)}):`, brl(config.valor_base), w))
 
   for (const faixa of faixas) {
-    lines.push(col(`Até ${formatDuration(faixa.ate_minutos)}:`, brl(faixa.valor), w))
+    lines.push(col(`Até ${horario(faixa.ate_minutos)} (${formatDuration(faixa.ate_minutos)}):`, brl(faixa.valor), w))
   }
 
   const acresceText = `Após ${formatDuration(config.franquia_minutos)}: +${brl(config.valor_bloco)}/cada ${config.minutos_por_bloco}min`
