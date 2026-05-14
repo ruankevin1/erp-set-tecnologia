@@ -165,8 +165,9 @@ function buildEntradaText(
   ]
 
   const headerParts: string[] = ['ENTRADA']
+  if (s.exibirEntrada) headerParts.push(hora)
   if (s.exibirCodigo) headerParts.push(`#${String(data.ticketNumero).padStart(3, '0')}`)
-  if (s.exibirEntrada) headerParts.push(`${dataStr}  ${hora}`)
+  if (s.exibirEntrada) headerParts.push(dataStr)
   lines.push(center(headerParts.join('  '), w))
 
   lines.push(
@@ -523,11 +524,9 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       printer.alignLeft()
 
       const headerParts: string[] = ['ENTRADA']
+      if (s.exibirEntrada) headerParts.push(dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))
       if (s.exibirCodigo) headerParts.push(`#${String(data.ticketNumero).padStart(3, '0')}`)
-      if (s.exibirEntrada) {
-        headerParts.push(`${dt.toLocaleDateString('pt-BR')}`)
-        headerParts.push(`${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`)
-      }
+      if (s.exibirEntrada) headerParts.push(dt.toLocaleDateString('pt-BR'))
       printer.println(headerParts.join('  '))
 
       printer.drawLine()
