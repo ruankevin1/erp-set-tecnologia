@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import {
   Save, Printer, RefreshCw, CheckCircle, XCircle,
   Plus, Trash2, Lock, Eye, Wifi, Usb, AlertTriangle, Upload, ChevronDown,
-  FolderOpen, RotateCcw, UserPlus
+  FolderOpen, RotateCcw, UserPlus, DatabaseZap
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -103,6 +103,9 @@ function ConfiguracoesContent() {
   const [senhaResetInput, setSenhaResetInput] = useState('')
   const [senhaResetErro, setSenhaResetErro] = useState(false)
   const [resettingApp, setResettingApp] = useState(false)
+  const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false)
+  const [limpezaNivel, setLimpezaNivel] = useState<1 | 2 | 3 | null>(null)
+  const [limpezaLoading, setLimpezaLoading] = useState(false)
   const [dbPath, setDbPath] = useState('')
   const { toast } = useToast()
 
@@ -534,6 +537,24 @@ function ConfiguracoesContent() {
 
   async function abrirPastaDados() {
     await window.api.app.openDataFolder()
+  }
+
+  async function executarLimpeza() {
+    if (!limpezaNivel) return
+    setLimpezaLoading(true)
+    try {
+      const res = await window.api.data.cleanup(limpezaNivel, ESTABELECIMENTO_ID)
+      if (res.success) {
+        toast({ title: 'Limpeza concluída com sucesso!' })
+        setModalLimpezaAberto(false)
+        setLimpezaNivel(null)
+      } else {
+        toast({ title: 'Erro na limpeza', description: res.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'Erro inesperado', variant: 'destructive' })
+    }
+    setLimpezaLoading(false)
   }
 
   function confirmarReset() {
@@ -1261,6 +1282,31 @@ function ConfiguracoesContent() {
                   Resetar instalação
                 </Button>
               </div>
+
+              <div className="border-t pt-4 space-y-2">
+                <p className="text-sm font-medium">Limpeza de dados</p>
+                <p className="text-xs text-muted-foreground">Remove dados localmente e no Supabase. Operadores e configurações do sistema nunca são apagados.</p>
+                <div className="space-y-2">
+                  {([
+                    { nivel: 1 as const, label: 'Nível 1 — Dados operacionais', desc: 'Visitas, fechamentos de caixa e logs de auditoria', color: 'text-orange-600 border-orange-400 hover:bg-orange-50' },
+                    { nivel: 2 as const, label: 'Nível 2 — + Cadastros', desc: 'Nível 1 + crianças e responsáveis', color: 'text-red-500 border-red-400 hover:bg-red-50' },
+                    { nivel: 3 as const, label: 'Nível 3 — + Configurações', desc: 'Nível 2 + tabelas de preço', color: 'text-red-700 border-red-600 hover:bg-red-50' },
+                  ]).map(({ nivel, label, desc, color }) => (
+                    <Button
+                      key={nivel}
+                      variant="outline"
+                      className={`w-full justify-start h-auto py-2 px-3 ${color}`}
+                      onClick={() => { setLimpezaNivel(nivel); setModalLimpezaAberto(true) }}
+                    >
+                      <DatabaseZap className="w-4 h-4 mr-2 shrink-0" />
+                      <div className="text-left">
+                        <p className="text-sm font-medium">{label}</p>
+                        <p className="text-xs opacity-70">{desc}</p>
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              </div>
             </CardContent>
           )}
         </Card>
@@ -1590,6 +1636,44 @@ function ConfiguracoesContent() {
         content={previewContent}
         title="Preview do Ticket de Entrada"
       />
+
+      {/* Modal Limpeza de dados */}
+      <Dialog
+        open={modalLimpezaAberto}
+        onOpenChange={(v) => { if (!v && !limpezaLoading) { setModalLimpezaAberto(false); setLimpezaNivel(null) } }}
+      >
+        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-red-600">
+              {limpezaNivel === 1 && 'Limpar dados operacionais'}
+              {limpezaNivel === 2 && 'Limpar dados operacionais e cadastros'}
+              {limpezaNivel === 3 && 'Limpar todos os dados'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-md px-3 py-2 text-xs text-red-700">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p><strong>Esta ação não pode ser desfeita.</strong> Serão removidos localmente e no Supabase:</p>
+                <ul className="list-disc list-inside space-y-0.5 mt-1">
+                  <li>Visitas, fechamentos de caixa e logs</li>
+                  {(limpezaNivel ?? 0) >= 2 && <li>Crianças e responsáveis</li>}
+                  {(limpezaNivel ?? 0) >= 3 && <li>Tabelas de preço</li>}
+                </ul>
+                <p className="mt-1">Operadores e configurações do sistema <strong>não serão afetados</strong>.</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => { setModalLimpezaAberto(false); setLimpezaNivel(null) }} disabled={limpezaLoading}>
+                Cancelar
+              </Button>
+              <Button size="sm" variant="destructive" onClick={executarLimpeza} disabled={limpezaLoading}>
+                {limpezaLoading ? 'Limpando...' : 'Confirmar limpeza'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

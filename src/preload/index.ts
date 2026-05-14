@@ -102,6 +102,10 @@ const api = {
     delete: (id: string) =>
       ipcRenderer.invoke('users:delete', { id }) as Promise<{ ok: boolean; erro?: string }>,
   },
+  data: {
+    cleanup: (nivel: 1 | 2 | 3, estabelecimentoId: string) =>
+      ipcRenderer.invoke('data:cleanup', { nivel, estabelecimentoId }) as Promise<{ success: boolean; error?: string }>,
+  },
   app: {
     openDataFolder: () => ipcRenderer.invoke('app:open-data-folder'),
     getDbPath: () => ipcRenderer.invoke('app:get-db-path') as Promise<string>,

@@ -68,30 +68,26 @@ function addMinStr(base: Date, minutes: number): string {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
-function buildScheduleLines(dt: Date, config: ConfigPreco, w = W): string[] {
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}min`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (m === 0) return h === 1 ? '1h' : `${h}h`
+  return `${h}h${m}min`
+}
+
+function buildScheduleLines(_dt: Date, config: ConfigPreco, w = W): string[] {
   const lines: string[] = []
   const faixas: FaixaIntermediaria[] = JSON.parse(config.faixas_intermediarias || '[]')
   faixas.sort((a, b) => a.ate_minutos - b.ate_minutos)
 
-  lines.push(`ATÉ AS ${addMinStr(dt, config.minutos_base)} - ${brl(config.valor_base)}`)
+  lines.push(col(`Até ${formatDuration(config.minutos_base)}:`, brl(config.valor_base), w))
 
-  let prevMin = config.minutos_base
-  for (let i = 0; i < faixas.length; i++) {
-    const faixa = faixas[i]
-    const isLast = i === faixas.length - 1
-    const displayEnd = isLast ? Math.min(faixa.ate_minutos, config.franquia_minutos - 1) : faixa.ate_minutos
-    lines.push(`DAS ${addMinStr(dt, prevMin + 1)} ATÉ ${addMinStr(dt, displayEnd)} - ${brl(faixa.valor)}`)
-    prevMin = faixa.ate_minutos
+  for (const faixa of faixas) {
+    lines.push(col(`Até ${formatDuration(faixa.ate_minutos)}:`, brl(faixa.valor), w))
   }
 
-  const h = Math.floor(config.franquia_minutos / 60)
-  const m = config.franquia_minutos % 60
-  const franquiaLonga = h > 0 && m === 0
-    ? (h === 1 ? '1 HORA' : `${h} HORAS`)
-    : h > 0
-      ? `${h === 1 ? '1 HORA' : `${h} HORAS`} E ${m} MINUTOS`
-      : `${config.franquia_minutos} MINUTOS`
-  const acresceText = `APOS ${franquiaLonga}: +${brl(config.valor_bloco)}/CADA ${config.minutos_por_bloco}MIN`
+  const acresceText = `Após ${formatDuration(config.franquia_minutos)}: +${brl(config.valor_bloco)}/cada ${config.minutos_por_bloco}min`
   const words = acresceText.split(' ')
   let line = ''
   for (const word of words) {
@@ -387,7 +383,7 @@ async function sendGdiTextToWindowsPrinter(printerName: string, text: string, li
   await fs.promises.writeFile(tmpPs, ps, 'utf8')
 
   return new Promise((resolve, reject) => {
-    exec(`powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NonInteractive -File "${tmpPs}"`, (err, _stdout, stderr) => {
+    exec(`powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NonInteractive -File "${tmpPs}"`, { windowsHide: true }, (err, _stdout, stderr) => {
       fs.promises.unlink(tmpPs).catch(() => {})
       if (err) reject(new Error(stderr || err.message))
       else resolve()
@@ -446,7 +442,7 @@ if (-not \$ok) { throw "Falha ao abrir impressora: ${escapedPrinter}" }
   await fs.promises.writeFile(tmpPs, ps, 'utf8')
 
   return new Promise((resolve, reject) => {
-    exec(`powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NonInteractive -File "${tmpPs}"`, (err, _stdout, stderr) => {
+    exec(`powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NonInteractive -File "${tmpPs}"`, { windowsHide: true }, (err, _stdout, stderr) => {
       fs.promises.unlink(tmpPs).catch(() => {})
       if (err) {
         console.error('[rawprint] stderr:', stderr)

@@ -22,6 +22,7 @@ import { registerCashHandlers } from './ipc/cash'
 import { registerSettingsHandlers } from './ipc/settings'
 import { registerAppHandlers } from './ipc/app'
 import { registerUsersHandlers } from './ipc/users'
+import { registerDataHandlers } from './ipc/data'
 import { initSyncService, setSyncWindow, startAutoSync } from './sync-service'
 
 let mainWindow: BrowserWindow | null = null
@@ -140,6 +141,7 @@ app.whenReady().then(() => {
   registerSettingsHandlers(ipcMain, db)
   registerAppHandlers(ipcMain, db)
   registerUsersHandlers(ipcMain, db)
+  registerDataHandlers(ipcMain, db)
 
   setupAutoUpdater()
   createWindow()
