@@ -338,7 +338,7 @@ async function sendGdiTextToWindowsPrinter(printerName: string, text: string, li
     '  # Largura do bitmap em pixels do dispositivo: PageBounds esta em 1/100 pol, dpi converte para pixels',
     '  $bmpW = [int][Math]::Max([int]($e.PageBounds.Width * $dpiX / 100.0), 300)',
     `  # Auto-sizing: encontra o maior tamanho de fonte onde ${lineWidth} chars cabem em 90% da largura da pagina`,
-    '  $targetW = [float]($bmpW * 0.90)',
+    '  $targetW = [float]($bmpW * 0.96)',
     `  $ruler   = [string]::new([char]"M", ${lineWidth})`,
     '  $fontSize = [float]11',
     '  $font = $null; $lh = [float]0',
