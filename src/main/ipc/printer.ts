@@ -317,7 +317,7 @@ async function isConnected(printer: ThermalPrinter, iface: string): Promise<bool
 // Renderiza texto num bitmap em memória, detecta se o driver espelha (ScaleX < 0),
 // pré-inverte o bitmap se necessário → driver espelha de volta → saída correta.
 // Epson/Bematech/TCP não usam esta função.
-async function sendGdiTextToWindowsPrinter(printerName: string, text: string): Promise<void> {
+async function sendGdiTextToWindowsPrinter(printerName: string, text: string, lineWidth = 48): Promise<void> {
   const tmpTxt = path.join(os.tmpdir(), `receipt_${Date.now()}.txt`)
   await fs.promises.writeFile(tmpTxt, text, 'utf8')
 
@@ -337,9 +337,9 @@ async function sendGdiTextToWindowsPrinter(printerName: string, text: string): P
     '  $dpiY = if ($e.Graphics.DpiY -gt 10) { [float]$e.Graphics.DpiY } else { [float]203 }',
     '  # Largura do bitmap em pixels do dispositivo: PageBounds esta em 1/100 pol, dpi converte para pixels',
     '  $bmpW = [int][Math]::Max([int]($e.PageBounds.Width * $dpiX / 100.0), 300)',
-    '  # Auto-sizing: encontra o maior tamanho de fonte onde 48 chars cabem em 90% da largura da pagina',
+    `  # Auto-sizing: encontra o maior tamanho de fonte onde ${lineWidth} chars cabem em 90% da largura da pagina`,
     '  $targetW = [float]($bmpW * 0.90)',
-    '  $ruler   = [string]::new([char]"M", 48)',
+    `  $ruler   = [string]::new([char]"M", ${lineWidth})`,
     '  $fontSize = [float]11',
     '  $font = $null; $lh = [float]0',
     '  do {',
@@ -457,14 +457,13 @@ if (-not \$ok) { throw "Falha ao abrir impressora: ${escapedPrinter}" }
   })
 }
 
-async function executePrint(printer: ThermalPrinter, iface: string, brand?: string, plainText?: string): Promise<void> {
+async function executePrint(printer: ThermalPrinter, iface: string, brand?: string, plainText?: string, lineWidth = W): Promise<void> {
   if (iface.startsWith('printer:')) {
     const name = iface.replace('printer:', '')
     if (brand === 'daruma') {
       // Daruma DR800 Spooler é driver GDI — não aceita RAW ESC/POS.
-      // Usa GDI com PageUnit=Millimeter para evitar problemas de transformação/espelhamento do driver.
       const text = plainText ?? ''
-      await sendGdiTextToWindowsPrinter(name, text)
+      await sendGdiTextToWindowsPrinter(name, text, lineWidth)
     } else {
       // Outros drivers Windows (Epson, Bematech) — tenta RAW ESC/POS via Win32
       const buf: Buffer = (printer as any).getBuffer()
@@ -545,7 +544,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       }
 
       printFooter(printer, s)
-      await executePrint(printer, iface, brand, preview)
+      await executePrint(printer, iface, brand, preview, w)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -622,7 +621,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       if (data.formaPagamento) printer.println(`Pgto: ${data.formaPagamento}`)
 
       printFooter(printer, s)
-      await executePrint(printer, iface, brand, preview)
+      await executePrint(printer, iface, brand, preview, w)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -662,6 +661,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
 
     try {
       const brand = getPrinterBrand(db)
+      const w = isGdiPrint(iface, brand) ? GW : W
       const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, error: 'Impressora não conectada' }
@@ -686,7 +686,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       printer.drawLine()
       printer.cut()
 
-      await executePrint(printer, iface, brand, preview)
+      await executePrint(printer, iface, brand, preview, w)
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.message }
@@ -773,7 +773,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
         printer.println(`FORMA: ${data.formaPagamento.toUpperCase()}`)
       }
       printFooter(printer, s)
-      await executePrint(printer, iface, brand, preview)
+      await executePrint(printer, iface, brand, preview, w)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -822,7 +822,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       printer.println(`Operador: ${data.operador_nome}`)
       printer.println(col('Suprimento inicial:', brlPad(data.suprimento_inicial)))
       printFooter(printer, s)
-      await executePrint(printer, iface, brand, preview)
+      await executePrint(printer, iface, brand, preview, w)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
@@ -966,7 +966,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       printer.println(col('Total esperado:', brlPad(totalEsperado)))
       printer.bold(false)
       printFooter(printer, s)
-      await executePrint(printer, iface, brand, preview)
+      await executePrint(printer, iface, brand, preview, w)
       return { success: true, preview }
     } catch (err: any) {
       return { success: false, preview, error: err.message }
