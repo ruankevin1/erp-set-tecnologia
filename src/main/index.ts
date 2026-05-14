@@ -90,6 +90,7 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     titleBarStyle: 'default',
+    backgroundColor: '#0f172a',
     title: 'ERP Set Tecnologia',
     icon: join(__dirname, process.platform === 'win32' ? '../../assets/icon.ico' : '../../assets/icon.png'),
     webPreferences: {
