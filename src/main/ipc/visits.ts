@@ -36,7 +36,7 @@ function calcularValor(minutos: number, config: ConfiguracaoPreco): number {
 
   const extra = minutos - config.franquia_minutos
   if (extra <= 0) return valorAntesDosBlocos
-  const blocos = Math.floor(extra / config.minutos_por_bloco)
+  const blocos = Math.ceil(extra / config.minutos_por_bloco)
   return valorAntesDosBlocos + blocos * config.valor_bloco
 }
 
