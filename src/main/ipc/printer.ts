@@ -35,17 +35,22 @@ interface TicketSettings {
   exibirTabela: boolean
 }
 
-const W = 48
+const W = 48   // ESC/POS e preview UI
+const GW = 32  // Daruma GDI — fonte maior exige menos chars por linha
 const FIXED_FOOTER = 'Desenvolvido por Set Tecnologia'
 
-function center(s: string): string {
-  const t = s.slice(0, W)
-  const sp = Math.floor((W - t.length) / 2)
+function isGdiPrint(iface: string, brand: string): boolean {
+  return iface.startsWith('printer:') && brand === 'daruma'
+}
+
+function center(s: string, w = W): string {
+  const t = s.slice(0, w)
+  const sp = Math.floor((w - t.length) / 2)
   return ' '.repeat(sp < 0 ? 0 : sp) + t
 }
 
-function hr(): string { return '-'.repeat(W) }
-function HR(): string { return '='.repeat(W) }
+function hr(w = W): string { return '-'.repeat(w) }
+function HR(w = W): string { return '='.repeat(w) }
 
 function formatPhone(raw: string): string {
   const d = raw.replace(/\D/g, '')
@@ -63,7 +68,7 @@ function addMinStr(base: Date, minutes: number): string {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
-function buildScheduleLines(dt: Date, config: ConfigPreco): string[] {
+function buildScheduleLines(dt: Date, config: ConfigPreco, w = W): string[] {
   const lines: string[] = []
   const faixas: FaixaIntermediaria[] = JSON.parse(config.faixas_intermediarias || '[]')
   faixas.sort((a, b) => a.ate_minutos - b.ate_minutos)
@@ -91,7 +96,7 @@ function buildScheduleLines(dt: Date, config: ConfigPreco): string[] {
   let line = ''
   for (const word of words) {
     const candidate = line ? `${line} ${word}` : word
-    if (candidate.length <= W) { line = candidate } else { lines.push(line); line = word }
+    if (candidate.length <= w) { line = candidate } else { lines.push(line); line = word }
   }
   if (line) lines.push(line)
 
@@ -132,18 +137,19 @@ function getIface(db: Database.Database): string {
   return r?.valor || process.env.PRINTER_INTERFACE || 'tcp://127.0.0.1:9100'
 }
 
-function buildFooter(s: TicketSettings): string[] {
-  const lines: string[] = [HR()]
-  if (s.rodape1) lines.push(center(s.rodape1))
-  if (s.rodape2) lines.push(center(s.rodape2))
-  lines.push(center(FIXED_FOOTER), HR())
+function buildFooter(s: TicketSettings, w = W): string[] {
+  const lines: string[] = [HR(w)]
+  if (s.rodape1) lines.push(center(s.rodape1, w))
+  if (s.rodape2) lines.push(center(s.rodape2, w))
+  lines.push(center(FIXED_FOOTER, w), HR(w))
   return lines
 }
 
 function buildEntradaText(
   data: { criancaNome: string; responsavelNome?: string; responsavelTelefone?: string; entradaEm: string; ticketNumero: number },
   configs: ConfigPreco[],
-  s: TicketSettings
+  s: TicketSettings,
+  w = W
 ): string {
   const dt = new Date(data.entradaEm)
   const dataStr = dt.toLocaleDateString('pt-BR')
@@ -151,27 +157,27 @@ function buildEntradaText(
   const tels = [s.tel1, s.tel2].filter(Boolean).join('  ')
 
   const lines: string[] = [
-    HR(),
-    center(s.nome.toUpperCase()),
-    ...(s.unidade ? [center(s.unidade)] : []),
-    ...(tels ? [center(tels)] : []),
-    HR(),
+    HR(w),
+    center(s.nome.toUpperCase(), w),
+    ...(s.unidade ? [center(s.unidade, w)] : []),
+    ...(tels ? [center(tels, w)] : []),
+    HR(w),
   ]
 
   const headerParts: string[] = ['ENTRADA']
   if (s.exibirCodigo) headerParts.push(`#${String(data.ticketNumero).padStart(3, '0')}`)
   if (s.exibirEntrada) headerParts.push(`${dataStr}  ${hora}`)
-  lines.push(headerParts.join('  '))
+  lines.push(center(headerParts.join('  '), w))
 
   lines.push(
-    hr(),
-    `Criança: ${data.criancaNome}`.slice(0, W),
+    hr(w),
+    `Criança: ${data.criancaNome}`.slice(0, w),
   )
   if (data.responsavelNome) {
-    lines.push(`Resp.:   ${data.responsavelNome}`.slice(0, W))
-    if (data.responsavelTelefone) lines.push(`         ${data.responsavelTelefone}`.slice(0, W))
+    lines.push(`Resp.:   ${data.responsavelNome}`.slice(0, w))
+    if (data.responsavelTelefone) lines.push(`         ${data.responsavelTelefone}`.slice(0, w))
   }
-  lines.push(hr())
+  lines.push(hr(w))
 
   if (s.exibirTabela && configs.length > 0) {
     for (const cfg of configs) {
@@ -179,32 +185,32 @@ function buildEntradaText(
         const ageLabel = cfg.idade_min != null && cfg.idade_max != null
           ? `${cfg.nome} (${cfg.idade_min}-${cfg.idade_max} anos)`
           : cfg.nome
-        lines.push(center(`-- ${ageLabel} --`))
+        lines.push(center(`-- ${ageLabel} --`, w))
       }
-      lines.push(...buildScheduleLines(dt, cfg))
+      lines.push(...buildScheduleLines(dt, cfg, w))
     }
   }
 
-  lines.push(...buildFooter(s))
+  lines.push(...buildFooter(s, w))
   return lines.join('\n')
 }
 
-function col(left: string, right: string): string {
-  const space = W - left.length - right.length
-  return (left + ' '.repeat(Math.max(1, space)) + right).slice(0, W)
+function col(left: string, right: string, w = W): string {
+  const space = w - left.length - right.length
+  return (left + ' '.repeat(Math.max(1, space)) + right).slice(0, w)
 }
 
-function buildBreakdown(minutos: number, config: ConfigPreco): string[] {
+function buildBreakdown(minutos: number, config: ConfigPreco, w = W): string[] {
   const faixas: FaixaIntermediaria[] = JSON.parse(config.faixas_intermediarias || '[]')
   faixas.sort((a, b) => a.ate_minutos - b.ate_minutos)
 
   if (minutos <= config.minutos_base) {
-    return [col(`Ate ${config.minutos_base}min`, brl(config.valor_base))]
+    return [col(`Ate ${config.minutos_base}min`, brl(config.valor_base), w)]
   }
 
   for (const faixa of faixas) {
     if (minutos <= faixa.ate_minutos) {
-      return [col(`Ate ${faixa.ate_minutos}min`, brl(faixa.valor))]
+      return [col(`Ate ${faixa.ate_minutos}min`, brl(faixa.valor), w)]
     }
   }
 
@@ -214,14 +220,14 @@ function buildBreakdown(minutos: number, config: ConfigPreco): string[] {
     : `Ate ${config.minutos_base}min`
 
   const extra = minutos - config.franquia_minutos
-  if (extra <= 0) return [col(labelBase, brl(valorBase))]
+  if (extra <= 0) return [col(labelBase, brl(valorBase), w)]
 
   const blocos = Math.ceil(extra / config.minutos_por_bloco)
   const valorExtra = blocos * config.valor_bloco
 
   return [
-    col(labelBase, brl(valorBase)),
-    col(`+${extra}min (${blocos}x R$${config.valor_bloco.toFixed(0)})`, brl(valorExtra)),
+    col(labelBase, brl(valorBase), w),
+    col(`+${extra}min (${blocos}x R$${config.valor_bloco.toFixed(0)})`, brl(valorExtra), w),
   ]
 }
 
@@ -232,7 +238,8 @@ function buildSaidaText(
     motivoDesconto?: string; formaPagamento?: string; ticketNumero?: number
     configuracao?: ConfigPreco
   },
-  s: TicketSettings
+  s: TicketSettings,
+  w = W
 ): string {
   const entrada = new Date(data.entradaEm)
   const saida = new Date(data.saidaEm)
@@ -243,38 +250,38 @@ function buildSaidaText(
   const tels = [s.tel1, s.tel2].filter(Boolean).join('  ')
   const hasDesconto = data.descontoValor && data.descontoValor > 0
 
-  const breakdown = data.configuracao ? buildBreakdown(data.minutos, data.configuracao) : []
+  const breakdown = data.configuracao ? buildBreakdown(data.minutos, data.configuracao, w) : []
   const descontoMonetario = (data.valorOriginal ?? data.valorTotal) - data.valorTotal
 
   const lines: string[] = [
-    HR(),
-    center(s.nome.toUpperCase()),
-    ...(s.unidade ? [center(s.unidade)] : []),
-    ...(tels ? [center(tels)] : []),
-    HR(),
-    ...(data.ticketNumero ? [center(`COMPROVANTE #${String(data.ticketNumero).padStart(3, '0')}`)] : []),
-    center(dataStr),
-    hr(),
-    `Criança: ${data.criancaNome}`.slice(0, W),
-    ...(data.responsavelNome ? [`Resp.:   ${data.responsavelNome}`.slice(0, W)] : []),
-    hr(),
+    HR(w),
+    center(s.nome.toUpperCase(), w),
+    ...(s.unidade ? [center(s.unidade, w)] : []),
+    ...(tels ? [center(tels, w)] : []),
+    HR(w),
+    ...(data.ticketNumero ? [center(`COMPROVANTE #${String(data.ticketNumero).padStart(3, '0')}`, w)] : []),
+    center(dataStr, w),
+    hr(w),
+    `Criança: ${data.criancaNome}`.slice(0, w),
+    ...(data.responsavelNome ? [`Resp.:   ${data.responsavelNome}`.slice(0, w)] : []),
+    hr(w),
     `Entrada:  ${entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
     `Saída:    ${saida.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
     `Duração:  ${dur}`,
-    hr(),
+    hr(w),
     ...breakdown,
-    ...(breakdown.length ? [hr()] : []),
+    ...(breakdown.length ? [hr(w)] : []),
     ...(hasDesconto ? [
-      col('VALOR ORIGINAL:', brl(data.valorOriginal ?? data.valorTotal)),
-      col('DESCONTO:',       `-${brl(descontoMonetario)}`),
-      hr(),
-      center(`TOTAL PAGO ${brl(data.valorTotal)}`),
-      ...(data.motivoDesconto ? [`Motivo: ${data.motivoDesconto}`.slice(0, W)] : []),
+      col('VALOR ORIGINAL:', brl(data.valorOriginal ?? data.valorTotal), w),
+      col('DESCONTO:',       `-${brl(descontoMonetario)}`, w),
+      hr(w),
+      center(`TOTAL PAGO ${brl(data.valorTotal)}`, w),
+      ...(data.motivoDesconto ? [`Motivo: ${data.motivoDesconto}`.slice(0, w)] : []),
     ] : [
-      center(`PAGO ${brl(data.valorTotal)}`),
+      center(`PAGO ${brl(data.valorTotal)}`, w),
     ]),
-    ...(data.formaPagamento ? [`Pgto: ${data.formaPagamento}`.slice(0, W)] : []),
-    ...buildFooter(s),
+    ...(data.formaPagamento ? [`Pgto: ${data.formaPagamento}`.slice(0, w)] : []),
+    ...buildFooter(s, w),
   ]
   return lines.join('\n')
 }
@@ -502,11 +509,12 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
   }) => {
     const s = getSettings(db)
     const configs = getPricing(db, data.estabelecimentoId)
-    const preview = buildEntradaText(data, configs, s)
+    const iface = getIface(db)
+    const brand = getPrinterBrand(db)
+    const w = isGdiPrint(iface, brand) ? GW : W
+    const preview = buildEntradaText(data, configs, s, w)
 
     try {
-      const iface = getIface(db)
-      const brand = getPrinterBrand(db)
       const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
@@ -532,7 +540,7 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
         printer.drawLine()
         for (const cfg of configs) {
           if (configs.length > 1) printer.println(cfg.nome)
-          for (const line of buildScheduleLines(dt, cfg)) printer.println(line)
+          for (const line of buildScheduleLines(dt, cfg, W)) printer.println(line)
         }
       }
 
@@ -560,11 +568,12 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     estabelecimentoId?: string
   }) => {
     const s = getSettings(db)
-    const preview = buildSaidaText(data, s)
+    const iface = getIface(db)
+    const brand = getPrinterBrand(db)
+    const w = isGdiPrint(iface, brand) ? GW : W
+    const preview = buildSaidaText(data, s, w)
 
     try {
-      const iface = getIface(db)
-      const brand = getPrinterBrand(db)
       const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
@@ -693,17 +702,20 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     estabelecimentoId: string
   }) => {
     const s = getSettings(db)
+    const iface = getIface(db)
+    const brand = getPrinterBrand(db)
+    const w = isGdiPrint(iface, brand) ? GW : W
     const saida = new Date(data.saidaEm)
     const dataStr = saida.toLocaleDateString('pt-BR')
     const tels = [s.tel1, s.tel2].filter(Boolean).join('  ')
 
     const lines: string[] = [
-      HR(), center(s.nome.toUpperCase()),
-      ...(s.unidade ? [center(s.unidade)] : []),
-      ...(tels ? [center(tels)] : []),
-      HR(), center('COMPROVANTE GRUPO'), center(dataStr), hr(),
-      ...(data.responsavelNome ? [`Resp.: ${data.responsavelNome}`.slice(0, W)] : []),
-      hr(),
+      HR(w), center(s.nome.toUpperCase(), w),
+      ...(s.unidade ? [center(s.unidade, w)] : []),
+      ...(tels ? [center(tels, w)] : []),
+      HR(w), center('COMPROVANTE GRUPO', w), center(dataStr, w), hr(w),
+      ...(data.responsavelNome ? [`Resp.: ${data.responsavelNome}`.slice(0, w)] : []),
+      hr(w),
     ]
 
     for (const c of data.criancas) {
@@ -712,23 +724,21 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
       const m = c.minutos % 60
       const dur = h > 0 ? `${h}h ${m}min` : `${m}min`
       lines.push(
-        c.nome.slice(0, W),
-        `Entrada: ${entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}  Saída: ${saida.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
-        `Duração: ${dur}   Valor: ${brl(c.valorTotal)}`,
-        hr(),
+        c.nome.slice(0, w),
+        `Entrada: ${entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}  Saida: ${saida.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+        `Duracao: ${dur}   Valor: ${brl(c.valorTotal)}`,
+        hr(w),
       )
     }
 
     lines.push(
-      center(`TOTAL ${brl(data.valorTotalGrupo)}`),
+      center(`TOTAL ${brl(data.valorTotalGrupo)}`, w),
       ...(data.formaPagamento ? [`FORMA: ${data.formaPagamento.toUpperCase()}`] : []),
-      ...buildFooter(s),
+      ...buildFooter(s, w),
     )
     const preview = lines.join('\n')
 
     try {
-      const iface = getIface(db)
-      const brand = getPrinterBrand(db)
       const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
@@ -780,23 +790,25 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     const dataStr = dt.toLocaleDateString('pt-BR')
     const hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
+    const iface = getIface(db)
+    const brand = getPrinterBrand(db)
+    const w = isGdiPrint(iface, brand) ? GW : W
+
     const lines: string[] = [
-      HR(),
-      center(s.nome.toUpperCase()),
-      ...(s.unidade ? [center(s.unidade)] : []),
-      HR(),
-      center('ABERTURA DE CAIXA'),
-      center(`${dataStr} - ${hora}`),
-      hr(),
-      `Operador: ${data.operador_nome}`.slice(0, W),
-      col('Suprimento inicial:', brlPad(data.suprimento_inicial)),
-      ...buildFooter(s),
+      HR(w),
+      center(s.nome.toUpperCase(), w),
+      ...(s.unidade ? [center(s.unidade, w)] : []),
+      HR(w),
+      center('ABERTURA DE CAIXA', w),
+      center(`${dataStr} - ${hora}`, w),
+      hr(w),
+      `Operador: ${data.operador_nome}`.slice(0, w),
+      col('Suprimento inicial:', brlPad(data.suprimento_inicial), w),
+      ...buildFooter(s, w),
     ]
     const preview = lines.join('\n')
 
     try {
-      const iface = getIface(db)
-      const brand = getPrinterBrand(db)
       const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
@@ -854,49 +866,51 @@ export function registerPrinterHandlers(ipcMain: IpcMain, db: Database.Database)
     const mediaStr = h > 0 ? `${h}h ${m}min` : `${m}min`
     const motivosDesconto = data.descontos_por_motivo ?? []
 
+    const iface = getIface(db)
+    const brand = getPrinterBrand(db)
+    const w = isGdiPrint(iface, brand) ? GW : W
+
     const lines: string[] = [
-      HR(),
-      center(s.nome.toUpperCase()),
-      ...(s.unidade ? [center(s.unidade)] : []),
-      HR(),
-      center('FECHAMENTO DE CAIXA'),
-      center(`${dataStr} - ${horaFechamento}`),
-      hr(),
-      `Operador: ${data.operador_nome}`.slice(0, W),
-      col('Abertura:', horaAbertura),
-      col('Fechamento:', horaFechamento),
-      hr(),
-      center('RESUMO DO DIA'),
-      hr(),
-      col('Total de visitas:', String(data.total_entradas)),
-      col('Tempo médio:', mediaStr),
-      hr(),
-      center('FORMAS DE PAGAMENTO'),
-      hr(),
-      ...FORMAS.map(forma => col(`${forma}:`, brlPad(formaMap[forma.toLowerCase()] ?? 0))),
-      hr(),
-      col('TOTAL BRUTO:', brlPad(totalBruto)),
-      col('Descontos:', totalDescontos > 0 ? `-${brlPad(totalDescontos)}` : brlPad(0)),
-      col('TOTAL LÍQUIDO:', brlPad(totalLiquido)),
+      HR(w),
+      center(s.nome.toUpperCase(), w),
+      ...(s.unidade ? [center(s.unidade, w)] : []),
+      HR(w),
+      center('FECHAMENTO DE CAIXA', w),
+      center(`${dataStr} - ${horaFechamento}`, w),
+      hr(w),
+      `Operador: ${data.operador_nome}`.slice(0, w),
+      col('Abertura:', horaAbertura, w),
+      col('Fechamento:', horaFechamento, w),
+      hr(w),
+      center('RESUMO DO DIA', w),
+      hr(w),
+      col('Total de visitas:', String(data.total_entradas), w),
+      col('Tempo medio:', mediaStr, w),
+      hr(w),
+      center('FORMAS DE PAGAMENTO', w),
+      hr(w),
+      ...FORMAS.map(forma => col(`${forma}:`, brlPad(formaMap[forma.toLowerCase()] ?? 0), w)),
+      hr(w),
+      col('TOTAL BRUTO:', brlPad(totalBruto), w),
+      col('Descontos:', totalDescontos > 0 ? `-${brlPad(totalDescontos)}` : brlPad(0), w),
+      col('TOTAL LIQUIDO:', brlPad(totalLiquido), w),
       ...(motivosDesconto.length > 0 ? [
-        hr(),
-        center('DESCONTOS POR MOTIVO'),
-        hr(),
-        ...motivosDesconto.map(d => col(`${d.motivo}:`, brlPad(d.total))),
+        hr(w),
+        center('DESCONTOS POR MOTIVO', w),
+        hr(w),
+        ...motivosDesconto.map(d => col(`${d.motivo}:`, brlPad(d.total), w)),
       ] : []),
-      hr(),
-      center('CONFERÊNCIA DO CAIXA'),
-      hr(),
-      col('Suprimento inicial:', brlPad(data.suprimento_inicial)),
-      col('Total em dinheiro:', brlPad(totalDinheiro)),
-      col('Total esperado:', brlPad(totalEsperado)),
-      ...buildFooter(s),
+      hr(w),
+      center('CONFERENCIA DO CAIXA', w),
+      hr(w),
+      col('Suprimento inicial:', brlPad(data.suprimento_inicial), w),
+      col('Total em dinheiro:', brlPad(totalDinheiro), w),
+      col('Total esperado:', brlPad(totalEsperado), w),
+      ...buildFooter(s, w),
     ]
     const preview = lines.join('\n')
 
     try {
-      const iface = getIface(db)
-      const brand = getPrinterBrand(db)
       const printer = makePrinter(iface, brand)
       const connected = await isConnected(printer, iface)
       if (!connected) return { success: false, preview, error: 'Impressora não conectada' }
