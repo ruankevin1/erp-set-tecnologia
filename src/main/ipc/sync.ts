@@ -283,8 +283,9 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
 
       db.prepare(`INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('estabelecimento_id', ?)`).run(estabelecimentoId)
 
-      // Remove linhas de outros estabelecimentos que possam ter ficado no SQLite (ex: UUID padrão do ensureEstabelecimento)
+      // Remove linhas de outros estabelecimentos/operadores que possam ter ficado no SQLite (ex: UUID padrão do boot)
       db.prepare(`DELETE FROM estabelecimentos WHERE id != ?`).run(estabelecimentoId)
+      db.prepare(`DELETE FROM operadores WHERE estabelecimento_id != ? AND master = 1`).run(estabelecimentoId)
 
       const insert = db.prepare(`
         INSERT OR REPLACE INTO configuracoes_preco

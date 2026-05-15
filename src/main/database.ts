@@ -343,7 +343,10 @@ function migrateOperadoresColunas(db: Database.Database): void {
 function ensureAdminMaster(db: Database.Database): void {
   const existing = db.prepare('SELECT id FROM operadores WHERE master = 1 LIMIT 1').get()
   if (!existing) {
-    const estabId = process.env.VITE_ESTABELECIMENTO_ID ?? '539eef80-ec1a-4567-98a2-f5dd0ab1c8c4'
+    // Lê o UUID real do estabelecimento do SQLite; cria o admin com sincronizado=1
+    // para que nunca tente empurrar ao Supabase (é apenas local/temp até o pull-all)
+    const estabId = (db.prepare("SELECT valor FROM configuracoes_sistema WHERE chave = 'estabelecimento_id'").get() as any)?.valor
+                    ?? '539eef80-ec1a-4567-98a2-f5dd0ab1c8c4'
     const hash = bcrypt.hashSync('admin', 10)
     db.prepare(`
       INSERT INTO operadores (id, estabelecimento_id, nome, login, senha_hash, nivel_acesso, master, ativo, sincronizado)
