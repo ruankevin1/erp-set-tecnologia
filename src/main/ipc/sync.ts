@@ -74,9 +74,14 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
   })
 
   ipcMain.handle('sync:reset-all', () => {
-    const tables = ['estabelecimentos', 'operadores', 'responsaveis', 'criancas', 'visitas', 'visita_faixas_aplicadas', 'fechamentos_caixa', 'logs_auditoria']
     db.transaction(() => {
-      for (const t of tables) db.exec(`UPDATE ${t} SET sincronizado = 0`)
+      // Operadores: nunca reseta master=1 (admin local; não é sincronizável)
+      db.exec(`UPDATE operadores SET sincronizado = 0 WHERE master = 0`)
+      // Estabelecimentos: só reseta a linha do UUID atual
+      const estabId = getSettingValue(db, 'estabelecimento_id')
+      if (estabId) db.prepare(`UPDATE estabelecimentos SET sincronizado = 0 WHERE id = ?`).run(estabId)
+      const others = ['responsaveis', 'criancas', 'visitas', 'visita_faixas_aplicadas', 'fechamentos_caixa', 'logs_auditoria']
+      for (const t of others) db.exec(`UPDATE ${t} SET sincronizado = 0`)
     })()
     return { success: true }
   })
