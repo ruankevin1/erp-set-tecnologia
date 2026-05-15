@@ -90,7 +90,7 @@ function getSetting(key: string): string | null {
 function getAllSettings(db: Database.Database): Record<string, string> {
   try {
     const rows = db.prepare(
-      "SELECT chave, valor FROM configuracoes_sistema WHERE chave != 'supabase_key'"
+      "SELECT chave, valor FROM configuracoes_sistema WHERE chave != 'supabase_key' ORDER BY chave"
     ).all() as { chave: string; valor: string }[]
     return Object.fromEntries(rows.map(r => [r.chave, r.valor]))
   } catch { return {} }
