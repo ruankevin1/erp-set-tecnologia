@@ -180,7 +180,19 @@ export async function pushToSupabase(
       if (rows.length === 0) continue
 
       // Strip internal fields before sending to Supabase
-      const clean = rows.map(({ sincronizado: _s, senha_hash: _h, deletado_em: _d, configuracao_preco_snapshot: _cp, ...rest }) => rest)
+      // Para estabelecimentos: enviar APENAS campos editáveis pelo cliente.
+      // ativo, criado_em, primeira_ativacao_em são controlados pelo master — nunca sobrescrever.
+      const clean = table === 'estabelecimentos'
+        ? rows.map(r => ({
+            id:            r.id,
+            nome:          r.nome,
+            cnpj:          r.cnpj ?? null,
+            telefone:      r.telefone ?? null,
+            endereco:      r.endereco ?? null,
+            configuracoes: r.configuracoes ?? null,
+            atualizado_em: r.atualizado_em,
+          }))
+        : rows.map(({ sincronizado: _s, senha_hash: _h, deletado_em: _d, configuracao_preco_snapshot: _cp, ...rest }) => rest)
       console.log(`[sync] ${table}: ${rows.length} registro(s)`)
 
       const headers = {
@@ -216,6 +228,25 @@ export async function pushToSupabase(
             } else {
               const singleBody = await singleRes.text()
               console.warn(`[sync] ${table} id=${rows[i].id} HTTP ${singleRes.status}: ${singleBody}`)
+
+              // Detecta registro órfão: se o pai já foi sincronizado (ou não existe localmente),
+              // o registro ficou preso por FK — marca como sincronizado para não travar o sync.
+              const orphanCheck: Record<string, { parentTable: string; fkCol: string }> = {
+                visita_faixas_aplicadas: { parentTable: 'visitas',    fkCol: 'visita_id'   },
+                fechamentos_caixa:       { parentTable: 'operadores', fkCol: 'operador_id' },
+              }
+              const check = orphanCheck[table]
+              if (check && rows[i][check.fkCol]) {
+                const parent = db.prepare(
+                  `SELECT sincronizado FROM ${check.parentTable} WHERE id = ?`
+                ).get(rows[i][check.fkCol]) as { sincronizado: number } | undefined
+                const parentSynced = !parent || parent.sincronizado === 1
+                if (parentSynced) {
+                  console.warn(`[sync] ${table} id=${rows[i].id}: pai já sincronizado ou inexistente — descartando registro órfão`)
+                  updateStmt.run(rows[i].id)
+                  ok++
+                }
+              }
             }
           }
           pushed[pushedKey] = (pushed[pushedKey] ?? 0) + ok

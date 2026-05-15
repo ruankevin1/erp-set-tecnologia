@@ -225,6 +225,7 @@ function deduplicateAdminMasters(db: Database.Database): void {
 
 function ensureEstabelecimento(db: Database.Database): void {
   const id = process.env.VITE_ESTABELECIMENTO_ID ?? '539eef80-ec1a-4567-98a2-f5dd0ab1c8c4'
+  // sincronizado=1: o master é quem cria o registro no Supabase — não tentamos fazer push
   db.prepare(`
     INSERT OR IGNORE INTO estabelecimentos (id, nome, ativo, sincronizado)
     VALUES (?, 'PlayKids', 1, 1)

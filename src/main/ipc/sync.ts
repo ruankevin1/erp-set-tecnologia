@@ -10,7 +10,7 @@ function getSettingValue(db: Database.Database, key: string): string | null {
   } catch { return null }
 }
 
-function buildAssinaturaResult(status: string, validaAte: string | null | undefined) {
+function buildAssinaturaResult(status: string, validaAte: string | null | undefined, ativo = 1) {
   let diasRestantes: number | null = null
   let expirado = false
   if (validaAte) {
@@ -18,7 +18,8 @@ function buildAssinaturaResult(status: string, validaAte: string | null | undefi
     diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
     expirado = diffMs <= 0
   }
-  const bloqueado = status === 'bloqueado' || (status === 'trial' && expirado)
+  // Bloqueia se: master desativou (ativo=0), status explícito, ou trial expirado
+  const bloqueado = ativo === 0 || status === 'bloqueado' || (status === 'trial' && expirado)
   return { status, valida_ate: validaAte ?? null, dias_restantes: diasRestantes, expirado, bloqueado }
 }
 
@@ -31,27 +32,29 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
     const cached = () => {
       const status = getSettingValue(db, 'assinatura_status') ?? 'ativo'
       const validaAte = getSettingValue(db, 'assinatura_valida_ate') || null
-      return buildAssinaturaResult(status, validaAte)
+      const ativo = parseInt(getSettingValue(db, 'assinatura_ativo') ?? '1')
+      return buildAssinaturaResult(status, validaAte, ativo)
     }
 
     if (!key) return cached()
 
     try {
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/estabelecimentos?id=eq.${estabelecimentoId}&select=status_assinatura,assinatura_valida_ate`,
+        `${SUPABASE_URL}/rest/v1/estabelecimentos?id=eq.${estabelecimentoId}&select=status_assinatura,assinatura_valida_ate,ativo`,
         { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${key}` } }
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const rows = await res.json() as any[]
       if (!rows?.length) throw new Error('Não encontrado')
 
-      const { status_assinatura, assinatura_valida_ate } = rows[0]
+      const { status_assinatura, assinatura_valida_ate, ativo } = rows[0]
       const s = db.prepare('INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES (?, ?)')
       s.run('assinatura_status', status_assinatura ?? 'ativo')
       s.run('assinatura_valida_ate', assinatura_valida_ate ?? '')
+      s.run('assinatura_ativo', String(ativo ?? 1))
       s.run('assinatura_check_em', new Date().toISOString())
 
-      return buildAssinaturaResult(status_assinatura ?? 'ativo', assinatura_valida_ate)
+      return buildAssinaturaResult(status_assinatura ?? 'ativo', assinatura_valida_ate, ativo ?? 1)
     } catch (err: any) {
       console.warn('[assinatura:check] usando cache:', err.message)
       return cached()
@@ -256,8 +259,28 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
       }
       const configs = await res.json()
 
-      // Garante que o estabelecimento existe localmente e salva o ID nas settings
-      db.prepare(`INSERT OR IGNORE INTO estabelecimentos (id, nome, ativo) VALUES (?, 'PlayKids', 1)`).run(estabelecimentoId)
+      // Busca dados do estabelecimento pré-criado pelo master no Supabase
+      const estabRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/estabelecimentos?id=eq.${estabelecimentoId}&select=id,nome,cnpj,telefone,endereco,ativo,criado_em,atualizado_em,primeira_ativacao_em`,
+        { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${key}` } }
+      )
+      if (estabRes.ok) {
+        const estabs = await estabRes.json() as any[]
+        if (estabs.length > 0) {
+          const e = estabs[0]
+          // UPSERT com sincronizado=1: o master é a fonte de verdade, não tentamos fazer push desse registro
+          db.prepare(`
+            INSERT OR REPLACE INTO estabelecimentos
+              (id, nome, cnpj, telefone, endereco, ativo, sincronizado, criado_em, atualizado_em, primeira_ativacao_em)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+          `).run(e.id, e.nome, e.cnpj ?? null, e.telefone ?? null, e.endereco ?? null,
+                 e.ativo ?? 1, e.criado_em, e.atualizado_em, e.primeira_ativacao_em ?? null)
+        }
+      } else {
+        // Fallback: garante linha local mesmo sem dados do Supabase
+        db.prepare(`INSERT OR IGNORE INTO estabelecimentos (id, nome, ativo, sincronizado) VALUES (?, 'PlayKids', 1, 1)`).run(estabelecimentoId)
+      }
+
       db.prepare(`INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('estabelecimento_id', ?)`).run(estabelecimentoId)
 
       const insert = db.prepare(`

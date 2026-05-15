@@ -47,20 +47,42 @@ export function registerSettingsHandlers(ipcMain: IpcMain, db: Database.Database
     })
     saveSettings()
 
-    // 2. Atualiza a linha de estabelecimentos — inclui primeira_ativacao_em se ainda nula
+    // 2. Atualiza a linha de estabelecimentos (apenas campos editáveis pelo cliente)
+    // ativo, criado_em, primeira_ativacao_em são controlados pelo master — nunca alterar localmente
     const agora = new Date().toISOString()
     db.prepare(`
       UPDATE estabelecimentos SET
-        nome               = ?,
-        cnpj               = ?,
-        endereco           = ?,
-        telefone           = ?,
-        atualizado_em      = ?,
-        primeira_ativacao_em = COALESCE(primeira_ativacao_em, ?),
-        sincronizado       = 0
-    `).run(nome, cnpj || null, endereco || null, telefone1 || null, agora, agora)
+        nome          = ?,
+        cnpj          = ?,
+        endereco      = ?,
+        telefone      = ?,
+        atualizado_em = ?,
+        sincronizado  = 0
+    `).run(nome, cnpj || null, endereco || null, telefone1 || null, agora)
 
-    // 3. Sincroniza imediatamente
+    // 3. Se primeira_ativacao_em ainda não foi setada e cliente preencheu dados,
+    //    notifica o Set ERP via endpoint dedicado (ele escreve a coluna com segurança)
+    const estab = db.prepare('SELECT primeira_ativacao_em FROM estabelecimentos LIMIT 1').get() as any
+    if (!estab?.primeira_ativacao_em && (cnpj || endereco || telefone1)) {
+      const supabaseKey = (db.prepare('SELECT valor FROM configuracoes_sistema WHERE chave = ?').get('supabase_key') as any)?.valor
+      if (supabaseKey) {
+        fetch('https://erp.settecnologia.app.br/api/playkids/cliente/ativar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseKey}` },
+          body: JSON.stringify({ cnpj, telefone: telefone1, endereco })
+        }).then(async r => {
+          if (r.ok) {
+            const data = await r.json() as any
+            if (data.primeira_ativacao_em) {
+              db.prepare('UPDATE estabelecimentos SET primeira_ativacao_em = ? WHERE 1=1').run(data.primeira_ativacao_em)
+              console.log('[estabelecimento:save] primeira_ativacao_em:', data.primeira_ativacao_em)
+            }
+          }
+        }).catch(err => console.warn('[estabelecimento:save] endpoint ativar:', err.message))
+      }
+    }
+
+    // 4. Sincroniza imediatamente
     triggerSync()
 
     return { success: true }
