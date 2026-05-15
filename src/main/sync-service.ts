@@ -149,16 +149,6 @@ export async function pushToSupabase(
   const errors: string[] = []
   const apiKey = supabaseAnonKey || supabaseKey
 
-  // Remove linhas de estabelecimentos com UUID diferente do atual (criadas antes do JWT ser configurado)
-  // Isso resolve o caso em que getPendentes conta 1 mas pushToSupabase encontra 0 linhas para enviar
-  const currentEstabIdForCleanup = getSetting('estabelecimento_id')
-  if (currentEstabIdForCleanup) {
-    const cleaned = db.prepare('DELETE FROM estabelecimentos WHERE id != ?').run(currentEstabIdForCleanup)
-    if ((cleaned as any).changes > 0) {
-      console.log(`[sync] Limpeza: ${(cleaned as any).changes} linha(s) de estabelecimentos com UUID diferente removidas`)
-    }
-  }
-
   for (const table of TABLES) {
     const pushedKey = table === 'logs_auditoria' ? 'logs' : table
     pushed[pushedKey] = 0
