@@ -283,9 +283,11 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
 
       db.prepare(`INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('estabelecimento_id', ?)`).run(estabelecimentoId)
 
-      // Remove linhas de outros estabelecimentos/operadores que possam ter ficado no SQLite (ex: UUID padrão do boot)
+      // Remove linhas de outros estabelecimentos que possam ter ficado no SQLite (ex: UUID padrão do boot)
       db.prepare(`DELETE FROM estabelecimentos WHERE id != ?`).run(estabelecimentoId)
-      db.prepare(`DELETE FROM operadores WHERE estabelecimento_id != ? AND master = 1`).run(estabelecimentoId)
+      // Corrige o estabelecimento_id do admin master local (criado antes do JWT ser conhecido)
+      // Nunca deleta — cliente novo não tem operadores no Supabase e precisa do admin para logar
+      db.prepare(`UPDATE operadores SET estabelecimento_id = ?, sincronizado = 1 WHERE master = 1`).run(estabelecimentoId)
 
       const insert = db.prepare(`
         INSERT OR REPLACE INTO configuracoes_preco

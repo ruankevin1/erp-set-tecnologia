@@ -141,9 +141,13 @@ export async function pushToSupabase(
       if (table === 'estabelecimentos') {
         const settings = getAllSettings(db)
         const json = JSON.stringify(settings)
-        const current = (_db!.prepare('SELECT configuracoes FROM estabelecimentos LIMIT 1').get() as any)?.configuracoes
-        if (current !== json) {
-          db.prepare('UPDATE estabelecimentos SET configuracoes = ?, sincronizado = 0').run(json)
+        const currentEstabIdForConfig = getSetting('estabelecimento_id')
+        if (currentEstabIdForConfig) {
+          const current = (db.prepare('SELECT configuracoes FROM estabelecimentos WHERE id = ?').get(currentEstabIdForConfig) as any)?.configuracoes
+          if (current !== json) {
+            // WHERE id = ? garante que só atualiza a linha do cliente atual
+            db.prepare('UPDATE estabelecimentos SET configuracoes = ?, sincronizado = 0 WHERE id = ?').run(json, currentEstabIdForConfig)
+          }
         }
       }
 
@@ -173,13 +177,17 @@ export async function pushToSupabase(
         }
       }
 
-      // Para estabelecimentos: só empurrar a linha do UUID atual (nunca linhas de outros clientes)
+      // Queries de push com filtros de segurança por tabela:
+      // - estabelecimentos: só a linha do UUID atual
+      // - operadores: nunca empurra master=1 (são locais; a RLS bloquearia por UUID errado ou por design)
       const currentEstabId = getSetting('estabelecimento_id')
       const activeQuery = table === 'estabelecimentos'
         ? `SELECT * FROM estabelecimentos WHERE sincronizado = 0${currentEstabId ? ` AND id = '${currentEstabId}'` : ''}`
-        : SOFT_DELETE_TABLES.has(table)
-          ? `SELECT * FROM ${table} WHERE sincronizado = 0 AND deletado_em IS NULL`
-          : `SELECT * FROM ${table} WHERE sincronizado = 0`
+        : table === 'operadores'
+          ? `SELECT * FROM operadores WHERE sincronizado = 0 AND master = 0`
+          : SOFT_DELETE_TABLES.has(table)
+            ? `SELECT * FROM ${table} WHERE sincronizado = 0 AND deletado_em IS NULL`
+            : `SELECT * FROM ${table} WHERE sincronizado = 0`
       const rows = db.prepare(activeQuery).all() as any[]
       if (rows.length === 0) continue
 
