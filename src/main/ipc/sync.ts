@@ -313,8 +313,27 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
 
       db.prepare(`INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('estabelecimento_id', ?)`).run(estabelecimentoId)
 
-      // Remove linhas de outros estabelecimentos que possam ter ficado no SQLite (ex: UUID padrão do boot)
-      db.prepare(`DELETE FROM estabelecimentos WHERE id != ?`).run(estabelecimentoId)
+      // Migra dados de UUIDs antigos (ex: UUID padrão do boot) para o UUID real do estabelecimento,
+      // depois remove as linhas antigas. Faz UPDATE antes do DELETE para não quebrar FK constraints.
+      const oldIds = (db.prepare(`SELECT id FROM estabelecimentos WHERE id != ?`).all(estabelecimentoId) as { id: string }[]).map(r => r.id)
+      if (oldIds.length > 0) {
+        db.pragma('foreign_keys = OFF')
+        try {
+          db.transaction(() => {
+            for (const oldId of oldIds) {
+              const childTables = ['operadores', 'configuracoes_preco', 'responsaveis', 'criancas', 'visitas', 'fechamentos_caixa', 'logs_auditoria']
+              for (const t of childTables) {
+                db.prepare(`UPDATE ${t} SET estabelecimento_id = ? WHERE estabelecimento_id = ?`).run(estabelecimentoId, oldId)
+              }
+              db.prepare(`DELETE FROM estabelecimentos WHERE id = ?`).run(oldId)
+            }
+          })()
+          console.log(`[fetch-config] Migrados ${oldIds.length} UUID(s) antigos → ${estabelecimentoId}`)
+        } finally {
+          db.pragma('foreign_keys = ON')
+        }
+      }
+
       // Corrige o estabelecimento_id do admin master local (criado antes do JWT ser conhecido)
       // Nunca deleta — cliente novo não tem operadores no Supabase e precisa do admin para logar
       db.prepare(`UPDATE operadores SET estabelecimento_id = ?, sincronizado = 1 WHERE master = 1`).run(estabelecimentoId)
