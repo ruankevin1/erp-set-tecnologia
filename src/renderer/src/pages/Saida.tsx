@@ -54,6 +54,12 @@ export function Saida() {
   const [grupoPreviews, setGrupoPreviews] = useState<Record<string, { minutos: number; valor_estimado: number }>>({})
   const [grupoSelecionados, setGrupoSelecionados] = useState<Set<string>>(new Set())
 
+  // Desconto grupo
+  const [grupoAplicarDesconto, setGrupoAplicarDesconto] = useState(false)
+  const [grupoDescontoTipo, setGrupoDescontoTipo] = useState<'percentual' | 'fixo'>('percentual')
+  const [grupoDescontoValorStr, setGrupoDescontoValorStr] = useState('')
+  const [grupoMotivoDesconto, setGrupoMotivoDesconto] = useState('')
+
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewContent, setPreviewContent] = useState('')
   const [filtro, setFiltro] = useState('')
@@ -144,6 +150,10 @@ export function Saida() {
     setGrupoCheckout(null)
     setGrupoFormaPagamento('')
     setGrupoPreviews({})
+    setGrupoAplicarDesconto(false)
+    setGrupoDescontoTipo('percentual')
+    setGrupoDescontoValorStr('')
+    setGrupoMotivoDesconto('')
     setGrupoDialogOpen(true)
     for (const v of grupo.visitas) {
       try {
@@ -253,12 +263,24 @@ export function Saida() {
     if (!grupoSelecionado) return
     const visitasParaSair = grupoSelecionado.visitas.filter(v => grupoSelecionados.has(v.id))
     if (visitasParaSair.length === 0) return
+    if (grupoAplicarDesconto && grupoDescontoValorNum > 0 && !grupoMotivoDesconto) {
+      toast({ title: 'Motivo obrigatório', description: 'Informe o motivo do desconto.', variant: 'destructive' })
+      return
+    }
+    if (grupoAplicarDesconto && grupoDescontoTipo === 'fixo' && grupoDescontoValorNum > totalGrupoSelecionado) {
+      toast({ title: 'Desconto inválido', description: 'O desconto não pode ser maior que o total do grupo.', variant: 'destructive' })
+      return
+    }
     setGrupoLoading(true)
     try {
+      const desconto = grupoAplicarDesconto && grupoDescontoValorNum > 0
+        ? { tipo: grupoDescontoTipo, valor: grupoDescontoValorNum, motivo: grupoMotivoDesconto }
+        : undefined
       const result = await window.api.visits.checkoutGroup({
         visitaIds: visitasParaSair.map(v => v.id),
         estabelecimentoId,
-        formaPagamento: grupoFormaPagamento || undefined
+        formaPagamento: grupoFormaPagamento || undefined,
+        desconto
       })
       setGrupoCheckout(result)
       for (const v of visitasParaSair) removeVisitaAtiva(v.id)
@@ -289,11 +311,23 @@ export function Saida() {
     setGrupoFormaPagamento('')
     setGrupoPreviews({})
     setGrupoSelecionados(new Set())
+    setGrupoAplicarDesconto(false)
+    setGrupoDescontoTipo('percentual')
+    setGrupoDescontoValorStr('')
+    setGrupoMotivoDesconto('')
   }
+
+  const grupoDescontoValorNum = parseFloat(grupoDescontoValorStr.replace(',', '.')) || 0
 
   const totalGrupoSelecionado = grupoSelecionado?.visitas
     .filter(v => grupoSelecionados.has(v.id))
     .reduce((s, v) => s + (grupoPreviews[v.id]?.valor_estimado ?? 0), 0) ?? 0
+
+  const totalGrupoComDesconto = useMemo(() => {
+    if (!grupoAplicarDesconto || grupoDescontoValorNum <= 0) return totalGrupoSelecionado
+    if (grupoDescontoTipo === 'percentual') return Math.max(0, totalGrupoSelecionado * (1 - grupoDescontoValorNum / 100))
+    return Math.max(0, totalGrupoSelecionado - grupoDescontoValorNum)
+  }, [grupoAplicarDesconto, grupoDescontoTipo, grupoDescontoValorNum, totalGrupoSelecionado])
 
   return (
     <div className="p-6 space-y-6 pb-12">
@@ -696,9 +730,108 @@ export function Saida() {
                     {grupoSelecionados.size} criança{grupoSelecionados.size !== 1 ? 's' : ''} selecionada{grupoSelecionados.size !== 1 ? 's' : ''}
                   </p>
                 </div>
-                <span className="text-2xl font-bold text-amber-800">
-                  {formatCurrency(totalGrupoSelecionado)}
-                </span>
+                <div className="text-right">
+                  {grupoAplicarDesconto && grupoDescontoValorNum > 0 ? (
+                    <>
+                      <p className="text-sm line-through text-amber-500">{formatCurrency(totalGrupoSelecionado)}</p>
+                      <p className="text-2xl font-bold text-amber-800">{formatCurrency(totalGrupoComDesconto)}</p>
+                      <p className="text-xs text-amber-600">
+                        -{grupoDescontoTipo === 'percentual' ? `${grupoDescontoValorNum}%` : formatCurrency(grupoDescontoValorNum)}
+                      </p>
+                    </>
+                  ) : (
+                    <span className="text-2xl font-bold text-amber-800">{formatCurrency(totalGrupoSelecionado)}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Desconto grupo */}
+              <div className="border rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setGrupoAplicarDesconto(v => !v)}
+                  className={cn(
+                    'w-full flex items-center justify-between px-4 py-3 text-sm font-medium transition-colors',
+                    grupoAplicarDesconto ? 'bg-violet-50 text-violet-800' : 'bg-white text-slate-700 hover:bg-slate-50'
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <Tag className="w-4 h-4" />
+                    Aplicar desconto ao grupo
+                  </span>
+                  <div className={cn(
+                    'w-9 h-5 rounded-full transition-colors relative',
+                    grupoAplicarDesconto ? 'bg-violet-600' : 'bg-slate-200'
+                  )}>
+                    <div className={cn(
+                      'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
+                      grupoAplicarDesconto ? 'translate-x-4' : 'translate-x-0.5'
+                    )} />
+                  </div>
+                </button>
+                {grupoAplicarDesconto && (
+                  <div className="px-4 pb-4 pt-3 space-y-3 border-t bg-violet-50/30">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setGrupoDescontoTipo('percentual')}
+                        className={cn(
+                          'flex-1 py-1.5 rounded text-xs font-medium border transition-colors',
+                          grupoDescontoTipo === 'percentual'
+                            ? 'bg-violet-600 text-white border-violet-600'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
+                        )}
+                      >
+                        Percentual (%)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGrupoDescontoTipo('fixo')}
+                        className={cn(
+                          'flex-1 py-1.5 rounded text-xs font-medium border transition-colors',
+                          grupoDescontoTipo === 'fixo'
+                            ? 'bg-violet-600 text-white border-violet-600'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
+                        )}
+                      >
+                        Valor fixo (R$)
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Valor do desconto</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                          {grupoDescontoTipo === 'percentual' ? '%' : 'R$'}
+                        </span>
+                        <Input
+                          className="pl-8 text-sm"
+                          placeholder="0"
+                          value={grupoDescontoValorStr}
+                          onChange={e => {
+                            const raw = e.target.value
+                            const num = parseFloat(raw.replace(',', '.'))
+                            const max = grupoDescontoTipo === 'percentual' ? 100 : totalGrupoSelecionado
+                            if (!isNaN(num) && num > max) return
+                            setGrupoDescontoValorStr(raw)
+                          }}
+                          type="number"
+                          min="0"
+                          max={grupoDescontoTipo === 'percentual' ? 100 : totalGrupoSelecionado}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Motivo do desconto <span className="text-red-500">*</span></Label>
+                      <Input
+                        className="text-sm"
+                        placeholder="Ex: Cortesia, aniversariante..."
+                        value={grupoMotivoDesconto}
+                        onChange={e => setGrupoMotivoDesconto(e.target.value)}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">O desconto será distribuído proporcionalmente entre as crianças.</p>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -723,7 +856,20 @@ export function Saida() {
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                 <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
                 <p className="text-sm text-green-700 mb-1">Saída em grupo registrada</p>
-                <p className="text-2xl font-bold text-green-700">{formatCurrency(grupoCheckout.valor_total_grupo)}</p>
+                {(grupoCheckout as any).desconto && (grupoCheckout as any).valor_original_grupo > grupoCheckout.valor_total_grupo ? (
+                  <>
+                    <p className="text-sm line-through text-green-500">{formatCurrency((grupoCheckout as any).valor_original_grupo)}</p>
+                    <p className="text-2xl font-bold text-green-700">{formatCurrency(grupoCheckout.valor_total_grupo)}</p>
+                    <p className="text-xs text-green-600 mt-0.5">
+                      Desconto: {(grupoCheckout as any).desconto.tipo === 'percentual'
+                        ? `${(grupoCheckout as any).desconto.valor}%`
+                        : formatCurrency((grupoCheckout as any).desconto.valor)
+                      } • {(grupoCheckout as any).desconto.motivo}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-2xl font-bold text-green-700">{formatCurrency(grupoCheckout.valor_total_grupo)}</p>
+                )}
                 {grupoCheckout.forma_pagamento && (
                   <p className="text-sm text-green-600 mt-1">{grupoCheckout.forma_pagamento}</p>
                 )}

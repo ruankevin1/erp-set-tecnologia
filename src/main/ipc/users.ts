@@ -107,6 +107,10 @@ export function registerUsersHandlers(ipcMain: IpcMain, db: Database.Database): 
       const user = db.prepare('SELECT master FROM operadores WHERE id = ?').get(id) as any
       if (!user) return { ok: false, erro: 'Usuário não encontrado' }
       if (user.master) return { ok: false, erro: 'Usuário master não pode ser excluído' }
+      // Desvincula registros que referenciam este operador antes de excluir
+      db.prepare('UPDATE visitas SET operador_id = NULL WHERE operador_id = ?').run(id)
+      db.prepare('UPDATE fechamentos_caixa SET operador_id = NULL WHERE operador_id = ?').run(id)
+      db.prepare('UPDATE logs_auditoria SET operador_id = NULL WHERE operador_id = ?').run(id)
       db.prepare('DELETE FROM operadores WHERE id = ?').run(id)
       return { ok: true }
     } catch (err) {

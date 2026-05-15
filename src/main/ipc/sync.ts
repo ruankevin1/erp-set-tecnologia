@@ -40,21 +40,33 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
 
     try {
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/estabelecimentos?id=eq.${estabelecimentoId}&select=status_assinatura,assinatura_valida_ate,ativo`,
+        `${SUPABASE_URL}/rest/v1/estabelecimentos?id=eq.${estabelecimentoId}&select=status_assinatura,assinatura_valida_ate,ativo,primeira_ativacao_em`,
         { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${key}` } }
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const rows = await res.json() as any[]
       if (!rows?.length) throw new Error('Não encontrado')
 
-      const { status_assinatura, assinatura_valida_ate, ativo } = rows[0]
+      const { status_assinatura, assinatura_valida_ate, ativo, primeira_ativacao_em } = rows[0]
+
+      // Fallback automático: se status é 'trial' mas assinatura_valida_ate não foi definida pelo master,
+      // calcula 7 dias a partir de primeira_ativacao_em (ou da data atual como último recurso)
+      let validaAte = assinatura_valida_ate || null
+      if ((status_assinatura === 'trial') && !validaAte) {
+        const base = primeira_ativacao_em ?? new Date().toISOString()
+        const expiry = new Date(base)
+        expiry.setDate(expiry.getDate() + 7)
+        validaAte = expiry.toISOString()
+        console.log('[assinatura:check] fallback trial valida_ate calculada:', validaAte)
+      }
+
       const s = db.prepare('INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES (?, ?)')
       s.run('assinatura_status', status_assinatura ?? 'ativo')
-      s.run('assinatura_valida_ate', assinatura_valida_ate ?? '')
+      s.run('assinatura_valida_ate', validaAte ?? '')
       s.run('assinatura_ativo', String(ativo ?? 1))
       s.run('assinatura_check_em', new Date().toISOString())
 
-      return buildAssinaturaResult(status_assinatura ?? 'ativo', assinatura_valida_ate, ativo ?? 1)
+      return buildAssinaturaResult(status_assinatura ?? 'ativo', validaAte, ativo ?? 1)
     } catch (err: any) {
       console.warn('[assinatura:check] usando cache:', err.message)
       return cached()

@@ -111,8 +111,23 @@ export function getPendentes(db: Database.Database): {
       return (db.prepare(`SELECT COUNT(*) as n FROM ${t} WHERE sincronizado = 0`).get() as any).n
     } catch { return 0 }
   }
+  // estabelecimentos: filtra pelo mesmo UUID que pushToSupabase usa — evita contar linhas órfãs de outros UUIDs
+  const estabIdForCount = (() => {
+    try {
+      return (db.prepare("SELECT valor FROM configuracoes_sistema WHERE chave = 'estabelecimento_id'").get() as any)?.valor ?? null
+    } catch { return null }
+  })()
+  const countEstab = (): number => {
+    try {
+      const q = estabIdForCount
+        ? `SELECT COUNT(*) as n FROM estabelecimentos WHERE sincronizado = 0 AND id = '${estabIdForCount}'`
+        : `SELECT COUNT(*) as n FROM estabelecimentos WHERE sincronizado = 0`
+      return (db.prepare(q).get() as any).n
+    } catch { return 0 }
+  }
+
   return {
-    estabelecimentos: count('estabelecimentos'),
+    estabelecimentos: countEstab(),
     configuracoes_preco: count('configuracoes_preco'),
     operadores: (() => { try { return (db.prepare(`SELECT COUNT(*) as n FROM operadores WHERE sincronizado = 0 AND master = 0`).get() as any).n } catch { return 0 } })(),
     responsaveis: count('responsaveis'),
@@ -133,6 +148,16 @@ export async function pushToSupabase(
   const pushed: Record<string, number> = {}
   const errors: string[] = []
   const apiKey = supabaseAnonKey || supabaseKey
+
+  // Remove linhas de estabelecimentos com UUID diferente do atual (criadas antes do JWT ser configurado)
+  // Isso resolve o caso em que getPendentes conta 1 mas pushToSupabase encontra 0 linhas para enviar
+  const currentEstabIdForCleanup = getSetting('estabelecimento_id')
+  if (currentEstabIdForCleanup) {
+    const cleaned = db.prepare('DELETE FROM estabelecimentos WHERE id != ?').run(currentEstabIdForCleanup)
+    if ((cleaned as any).changes > 0) {
+      console.log(`[sync] Limpeza: ${(cleaned as any).changes} linha(s) de estabelecimentos com UUID diferente removidas`)
+    }
+  }
 
   for (const table of TABLES) {
     const pushedKey = table === 'logs_auditoria' ? 'logs' : table
