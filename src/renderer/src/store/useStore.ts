@@ -19,6 +19,9 @@ interface AppState {
   updateReleaseNotes: string | null
   updateDownloaded: boolean
   downloadProgress: number | null
+  assinaturaStatus: 'trial' | 'ativo' | 'bloqueado' | null
+  assinaturaDiasRestantes: number | null
+  assinaturaBloqueada: boolean
   setVisitasAtivas: (visitas: Visita[]) => void
   addVisitaAtiva: (visita: Visita) => void
   removeVisitaAtiva: (id: string) => void
@@ -34,6 +37,7 @@ interface AppState {
   setUpdateAvailable: (version: string, releaseNotes?: string | null) => void
   setUpdateDownloaded: (version: string) => void
   setDownloadProgress: (percent: number | null) => void
+  setAssinatura: (status: 'trial' | 'ativo' | 'bloqueado', diasRestantes: number | null, bloqueada: boolean) => void
   refreshVisitas: () => Promise<void>
   refreshCaixa: () => Promise<void>
   refreshPricing: () => Promise<void>
@@ -56,6 +60,9 @@ export const useStore = create<AppState>((set, get) => ({
   updateReleaseNotes: null,
   updateDownloaded: false,
   downloadProgress: null,
+  assinaturaStatus: null,
+  assinaturaDiasRestantes: null,
+  assinaturaBloqueada: false,
 
   setVisitasAtivas: (visitas) => set({ visitasAtivas: visitas }),
   addVisitaAtiva: (visita) => set((s) => ({ visitasAtivas: [visita, ...s.visitasAtivas] })),
@@ -75,6 +82,7 @@ export const useStore = create<AppState>((set, get) => ({
   setUpdateAvailable: (version, releaseNotes) => set({ updateAvailable: true, updateVersion: version, updateReleaseNotes: releaseNotes ?? null }),
   setUpdateDownloaded: (version) => set({ updateDownloaded: true, updateVersion: version }),
   setDownloadProgress: (percent) => set({ downloadProgress: percent }),
+  setAssinatura: (status, diasRestantes, bloqueada) => set({ assinaturaStatus: status, assinaturaDiasRestantes: diasRestantes, assinaturaBloqueada: bloqueada }),
 
   refreshVisitas: async () => {
     const { estabelecimentoId } = get()

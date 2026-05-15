@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Toaster } from './ui/toaster'
 import { UpdateBanner } from './UpdateBanner'
+import { TrialBanner } from './TrialBanner'
 import { useStore } from '@/store/useStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useToast } from '@/hooks/useToast'
@@ -57,6 +58,7 @@ export function Layout() {
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar />
       <main className="flex-1 overflow-auto flex flex-col">
+        <TrialBanner />
         <UpdateBanner />
         <div className="flex-1 max-w-[1440px] mx-auto w-full">
           <Outlet />

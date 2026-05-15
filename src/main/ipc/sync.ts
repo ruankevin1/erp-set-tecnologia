@@ -10,8 +10,53 @@ function getSettingValue(db: Database.Database, key: string): string | null {
   } catch { return null }
 }
 
+function buildAssinaturaResult(status: string, validaAte: string | null | undefined) {
+  let diasRestantes: number | null = null
+  let expirado = false
+  if (validaAte) {
+    const diffMs = new Date(validaAte).getTime() - Date.now()
+    diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+    expirado = diffMs <= 0
+  }
+  const bloqueado = status === 'bloqueado' || (status === 'trial' && expirado)
+  return { status, valida_ate: validaAte ?? null, dias_restantes: diasRestantes, expirado, bloqueado }
+}
+
 export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle('sync:status', () => ({ pendentes: getPendentes(db) }))
+
+  ipcMain.handle('assinatura:check', async (_event, { estabelecimentoId }: { estabelecimentoId: string }) => {
+    const key = getSettingValue(db, 'supabase_key')
+
+    const cached = () => {
+      const status = getSettingValue(db, 'assinatura_status') ?? 'ativo'
+      const validaAte = getSettingValue(db, 'assinatura_valida_ate') || null
+      return buildAssinaturaResult(status, validaAte)
+    }
+
+    if (!key) return cached()
+
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/estabelecimentos?id=eq.${estabelecimentoId}&select=status_assinatura,assinatura_valida_ate`,
+        { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${key}` } }
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const rows = await res.json() as any[]
+      if (!rows?.length) throw new Error('Não encontrado')
+
+      const { status_assinatura, assinatura_valida_ate } = rows[0]
+      const s = db.prepare('INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES (?, ?)')
+      s.run('assinatura_status', status_assinatura ?? 'ativo')
+      s.run('assinatura_valida_ate', assinatura_valida_ate ?? '')
+      s.run('assinatura_check_em', new Date().toISOString())
+
+      return buildAssinaturaResult(status_assinatura ?? 'ativo', assinatura_valida_ate)
+    } catch (err: any) {
+      console.warn('[assinatura:check] usando cache:', err.message)
+      return cached()
+    }
+  })
 
   ipcMain.handle('sync:trigger', () => {
     triggerSync()

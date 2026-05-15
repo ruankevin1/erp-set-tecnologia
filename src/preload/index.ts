@@ -61,6 +61,16 @@ const api = {
     saveEstabelecimento: (data: { nome: string; cnpj?: string; endereco?: string; telefone1?: string; telefone2?: string; unidade?: string }) =>
       ipcRenderer.invoke('estabelecimento:save', data) as Promise<{ success: boolean }>
   },
+  assinatura: {
+    check: (estabelecimentoId: string) =>
+      ipcRenderer.invoke('assinatura:check', { estabelecimentoId }) as Promise<{
+        status: string
+        valida_ate: string | null
+        dias_restantes: number | null
+        expirado: boolean
+        bloqueado: boolean
+      }>
+  },
   sync: {
     status: () => ipcRenderer.invoke('sync:status'),
     trigger: () => ipcRenderer.invoke('sync:trigger'),
