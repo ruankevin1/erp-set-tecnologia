@@ -333,7 +333,6 @@ function ConfiguracoesContent() {
       const nome = estabNome.trim() || 'PlayKids'
       await window.api.settings.saveEstabelecimento({
         nome,
-        cnpj: estabCnpj.trim(),
         endereco: estabEndereco.trim(),
         telefone1: estabTel1.trim(),
         telefone2: estabTel2.trim(),
@@ -751,8 +750,8 @@ function ConfiguracoesContent() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>CNPJ</Label>
-              <Input value={estabCnpj} onChange={(e) => setEstabCnpj(e.target.value)} placeholder="00.000.000/0000-00" />
+              <Label>CNPJ <span className="text-xs text-muted-foreground">(definido pelo master)</span></Label>
+              <Input value={estabCnpj} readOnly disabled className="opacity-60 cursor-not-allowed" placeholder="Vinculado ao contrato" />
             </div>
             <div className="space-y-1.5">
               <Label>Telefone 1</Label>

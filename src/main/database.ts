@@ -354,7 +354,13 @@ function ensureAdminMaster(db: Database.Database): void {
     `).run(randomUUID(), estabId, hash)
     console.log('[DB] Admin master criado')
   } else {
-    db.prepare('UPDATE operadores SET sincronizado = 1 WHERE master = 1').run()
+    // Corrige o estabelecimento_id do master caso tenha sido criado antes do JWT ser conhecido
+    const currentEstabId = (db.prepare("SELECT valor FROM configuracoes_sistema WHERE chave = 'estabelecimento_id'").get() as any)?.valor
+    if (currentEstabId) {
+      db.prepare('UPDATE operadores SET estabelecimento_id = ?, sincronizado = 1 WHERE master = 1').run(currentEstabId)
+    } else {
+      db.prepare('UPDATE operadores SET sincronizado = 1 WHERE master = 1').run()
+    }
   }
 }
 

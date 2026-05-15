@@ -39,7 +39,7 @@ export function registerSettingsHandlers(ipcMain: IpcMain, db: Database.Database
     const s = db.prepare('INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES (?, ?)')
     const saveSettings = db.transaction(() => {
       s.run('estabelecimento_nome', nome)
-      s.run('estabelecimento_cnpj', cnpj)
+      // CNPJ não é editável pelo cliente — controlado pelo master via Supabase
       s.run('estabelecimento_endereco', endereco)
       s.run('estabelecimento_telefone1', telefone1)
       s.run('estabelecimento_telefone2', telefone2)
@@ -61,14 +61,13 @@ export function registerSettingsHandlers(ipcMain: IpcMain, db: Database.Database
       db.prepare(`
         UPDATE estabelecimentos SET
           nome          = ?,
-          cnpj          = ?,
           endereco      = ?,
           telefone      = ?,
           configuracoes = ?,
           atualizado_em = ?,
           sincronizado  = 0
         WHERE id = ?
-      `).run(nome, cnpj || null, endereco || null, telefone1 || null, configuracoes, agora, estabId)
+      `).run(nome, endereco || null, telefone1 || null, configuracoes, agora, estabId)
     }
 
     // 3. Se primeira_ativacao_em ainda não foi setada e cliente preencheu dados,

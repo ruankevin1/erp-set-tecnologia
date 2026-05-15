@@ -289,6 +289,10 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
             `).run(e.id, e.nome, e.cnpj ?? null, e.telefone ?? null, e.endereco ?? null,
                    e.ativo ?? 1, e.criado_em, e.atualizado_em, e.primeira_ativacao_em ?? null)
           }
+          // CNPJ é controlado pelo master — salva em configuracoes_sistema para exibição read-only na UI
+          if (e.cnpj) {
+            db.prepare("INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('estabelecimento_cnpj', ?)").run(e.cnpj)
+          }
         }
       } else {
         // Fallback: garante linha local mesmo sem dados do Supabase
