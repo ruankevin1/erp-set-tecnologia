@@ -57,7 +57,9 @@ const api = {
   settings: {
     get: (chave: string) => ipcRenderer.invoke('settings:get', chave),
     set: (chave: string, valor: string) => ipcRenderer.invoke('settings:set', chave, valor),
-    getAll: () => ipcRenderer.invoke('settings:get-all')
+    getAll: () => ipcRenderer.invoke('settings:get-all'),
+    saveEstabelecimento: (data: { nome: string; cnpj?: string; endereco?: string; telefone1?: string; telefone2?: string; unidade?: string }) =>
+      ipcRenderer.invoke('estabelecimento:save', data) as Promise<{ success: boolean }>
   },
   sync: {
     status: () => ipcRenderer.invoke('sync:status'),

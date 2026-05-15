@@ -49,12 +49,14 @@ export function getDatabase(): Database.Database {
 }
 
 export function resetLocalData(db: Database.Database): void {
+  db.pragma('foreign_keys = OFF')
   const tables = (db.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
   ).all() as { name: string }[])
   for (const { name } of tables) {
     db.exec(`DROP TABLE IF EXISTS "${name}"`)
   }
+  db.pragma('foreign_keys = ON')
   runMigrations(db)
 }
 
@@ -203,6 +205,7 @@ function runMigrations(db: Database.Database): void {
   migrateOperadoresColunas(db)
   migrateEstabelecimentosColunas(db)
   migrateSoftDelete(db)
+  migrateResponsaveisColunas(db)
   ensureConfiguracoesSistema(db)
   ensureEstabelecimento(db)
   ensureDefaultPricingConfig(db)
@@ -289,6 +292,8 @@ function ensureConfiguracoesSistema(db: Database.Database): void {
   `)
   const defaults: [string, string][] = [
     ['estabelecimento_nome', 'PlayKids'],
+    ['estabelecimento_cnpj', ''],
+    ['estabelecimento_endereco', ''],
     ['estabelecimento_telefone1', ''],
     ['estabelecimento_telefone2', ''],
     ['rodape_ticket', 'Agradecemos sua visita!'],
@@ -349,6 +354,13 @@ function ensureAdminMaster(db: Database.Database): void {
   }
 }
 
+function migrateResponsaveisColunas(db: Database.Database): void {
+  const cols = new Set(
+    (db.prepare('PRAGMA table_info(responsaveis)').all() as { name: string }[]).map(r => r.name)
+  )
+  if (!cols.has('telefone2')) db.exec('ALTER TABLE responsaveis ADD COLUMN telefone2 TEXT')
+}
+
 function migrateSoftDelete(db: Database.Database): void {
   const respCols = new Set(
     (db.prepare('PRAGMA table_info(responsaveis)').all() as { name: string }[]).map(r => r.name)
@@ -366,6 +378,10 @@ function migrateEstabelecimentosColunas(db: Database.Database): void {
     (db.prepare('PRAGMA table_info(estabelecimentos)').all() as { name: string }[]).map(r => r.name)
   )
   if (!cols.has('configuracoes')) db.exec('ALTER TABLE estabelecimentos ADD COLUMN configuracoes TEXT')
+  if (!cols.has('cnpj')) db.exec('ALTER TABLE estabelecimentos ADD COLUMN cnpj TEXT')
+  if (!cols.has('endereco')) db.exec('ALTER TABLE estabelecimentos ADD COLUMN endereco TEXT')
+  if (!cols.has('telefone')) db.exec('ALTER TABLE estabelecimentos ADD COLUMN telefone TEXT')
+  if (!cols.has('primeira_ativacao_em')) db.exec('ALTER TABLE estabelecimentos ADD COLUMN primeira_ativacao_em TEXT')
 }
 
 function migrateConfiguracoesPrecoColunas(db: Database.Database): void {

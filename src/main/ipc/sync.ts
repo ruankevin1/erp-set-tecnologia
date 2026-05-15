@@ -91,10 +91,10 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
       try {
         db.transaction(() => {
           const stmtEstab = db.prepare(`INSERT OR REPLACE INTO estabelecimentos
-            (id, nome, cnpj, endereco, telefone, ativo, configuracoes, sincronizado, criado_em, atualizado_em)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+            (id, nome, cnpj, endereco, telefone, ativo, configuracoes, sincronizado, criado_em, atualizado_em, primeira_ativacao_em)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`)
           for (const r of estabelecimentos) {
-            stmtEstab.run(r.id, r.nome, r.cnpj ?? null, r.endereco ?? null, r.telefone ?? null, r.ativo ?? 1, r.configuracoes ?? null, r.criado_em, r.atualizado_em)
+            stmtEstab.run(r.id, r.nome, r.cnpj ?? null, r.endereco ?? null, r.telefone ?? null, r.ativo ?? 1, r.configuracoes ?? null, r.criado_em, r.atualizado_em, r.primeira_ativacao_em ?? null)
             if (r.configuracoes) {
               try {
                 const settings = JSON.parse(r.configuracoes)

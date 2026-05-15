@@ -148,6 +148,8 @@ function ConfiguracoesContent() {
   // Dados do estabelecimento
   const [estabNome, setEstabNome] = useState('PlayKids')
   const [estabUnidade, setEstabUnidade] = useState('')
+  const [estabCnpj, setEstabCnpj] = useState('')
+  const [estabEndereco, setEstabEndereco] = useState('')
   const [estabTel1, setEstabTel1] = useState('')
   const [estabTel2, setEstabTel2] = useState('')
   const [savingEstab, setSavingEstab] = useState(false)
@@ -282,6 +284,8 @@ function ConfiguracoesContent() {
     const all = await window.api.settings.getAll()
     setEstabNome(all['estabelecimento_nome'] ?? 'PlayKids')
     setEstabUnidade(all['ticket_unidade'] ?? '')
+    setEstabCnpj(all['estabelecimento_cnpj'] ?? '')
+    setEstabEndereco(all['estabelecimento_endereco'] ?? '')
     setEstabTel1(all['estabelecimento_telefone1'] ?? '')
     setEstabTel2(all['estabelecimento_telefone2'] ?? '')
 
@@ -328,10 +332,14 @@ function ConfiguracoesContent() {
     setSavingEstab(true)
     try {
       const nome = estabNome.trim() || 'PlayKids'
-      await window.api.settings.set('estabelecimento_nome', nome)
-      await window.api.settings.set('ticket_unidade', estabUnidade.trim())
-      await window.api.settings.set('estabelecimento_telefone1', estabTel1.trim())
-      await window.api.settings.set('estabelecimento_telefone2', estabTel2.trim())
+      await window.api.settings.saveEstabelecimento({
+        nome,
+        cnpj: estabCnpj.trim(),
+        endereco: estabEndereco.trim(),
+        telefone1: estabTel1.trim(),
+        telefone2: estabTel2.trim(),
+        unidade: estabUnidade.trim(),
+      })
       setNomeEstabelecimento(nome)
       toast({ title: 'Dados do estabelecimento salvos!' })
     } catch {
@@ -744,13 +752,21 @@ function ConfiguracoesContent() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
+              <Label>CNPJ</Label>
+              <Input value={estabCnpj} onChange={(e) => setEstabCnpj(e.target.value)} placeholder="00.000.000/0000-00" />
+            </div>
+            <div className="space-y-1.5">
               <Label>Telefone 1</Label>
               <Input value={estabTel1} onChange={(e) => setEstabTel1(e.target.value)} placeholder="(00) 9999-9999" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Telefone 2</Label>
-              <Input value={estabTel2} onChange={(e) => setEstabTel2(e.target.value)} placeholder="(00) 9999-9999" />
-            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Endereço</Label>
+            <Input value={estabEndereco} onChange={(e) => setEstabEndereco(e.target.value)} placeholder="Rua Example, 123 – Bairro – Cidade/UF" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Telefone 2</Label>
+            <Input value={estabTel2} onChange={(e) => setEstabTel2(e.target.value)} placeholder="(00) 9999-9999" />
           </div>
           <Button onClick={salvarEstabelecimento} disabled={savingEstab}>
             <Save className="w-4 h-4 mr-2" />
