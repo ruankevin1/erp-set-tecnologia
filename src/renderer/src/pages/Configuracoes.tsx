@@ -750,8 +750,8 @@ function ConfiguracoesContent() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>CNPJ <span className="text-xs text-muted-foreground">(definido pelo master)</span></Label>
-              <Input value={estabCnpj} readOnly disabled className="opacity-60 cursor-not-allowed" placeholder="Vinculado ao contrato" />
+              <Label>CNPJ</Label>
+              <Input value={estabCnpj} readOnly className="bg-muted/40 cursor-default" placeholder="Aguardando sincronização..." />
             </div>
             <div className="space-y-1.5">
               <Label>Telefone 1</Label>
@@ -1338,23 +1338,9 @@ function ConfiguracoesContent() {
           <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform shrink-0', secoesAbertas.sobre ? 'rotate-180' : '')} />
         </CardHeader>
         {secoesAbertas.sobre && <CardContent className="text-sm text-muted-foreground space-y-3">
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <p>ERP Set Tecnologia <strong>v{version}</strong></p>
-            <div className="bg-muted/50 rounded-md px-3 py-2.5 space-y-1.5 text-xs font-mono">
-              <div className="flex items-start gap-2">
-                <span className="text-muted-foreground shrink-0 w-10">UUID</span>
-                <code className="break-all">{estabelecimentoId}</code>
-              </div>
-              {estabCnpj && (
-                <div className="flex items-start gap-2 border-t pt-1.5">
-                  <span className="text-muted-foreground shrink-0 w-10">CNPJ</span>
-                  <code>{estabCnpj}</code>
-                </div>
-              )}
-            </div>
-            {!estabCnpj && (
-              <p className="text-xs text-muted-foreground">CNPJ não definido — aguardando sincronização com o servidor.</p>
-            )}
+            <p>Estabelecimento ID: <code className="text-xs bg-muted px-1 py-0.5 rounded">{estabelecimentoId}</code></p>
           </div>
           <Button variant="outline" size="sm" onClick={async () => {
             await window.api.updater?.checkNow?.()

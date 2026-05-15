@@ -40,14 +40,19 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
 
     try {
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/estabelecimentos?id=eq.${estabelecimentoId}&select=status_assinatura,assinatura_valida_ate,ativo,primeira_ativacao_em`,
+        `${SUPABASE_URL}/rest/v1/estabelecimentos?id=eq.${estabelecimentoId}&select=status_assinatura,assinatura_valida_ate,ativo,primeira_ativacao_em,cnpj`,
         { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${key}` } }
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const rows = await res.json() as any[]
       if (!rows?.length) throw new Error('Não encontrado')
 
-      const { status_assinatura, assinatura_valida_ate, ativo, primeira_ativacao_em } = rows[0]
+      const { status_assinatura, assinatura_valida_ate, ativo, primeira_ativacao_em, cnpj } = rows[0]
+
+      // Garante que o CNPJ cadastrado pelo master fique sempre atualizado localmente
+      if (cnpj) {
+        db.prepare("INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('estabelecimento_cnpj', ?)").run(cnpj)
+      }
 
       // Fallback automático: se status é 'trial' mas assinatura_valida_ate não foi definida pelo master,
       // calcula 7 dias a partir de primeira_ativacao_em (ou da data atual como último recurso)
