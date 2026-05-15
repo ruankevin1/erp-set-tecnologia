@@ -53,16 +53,22 @@ export function registerSettingsHandlers(ipcMain: IpcMain, db: Database.Database
     const estabId = (db.prepare('SELECT valor FROM configuracoes_sistema WHERE chave = ?').get('estabelecimento_id') as any)?.valor
     const agora = new Date().toISOString()
     if (estabId) {
+      // Snapshot das configurações atuais para o campo configuracoes (lido pelo master no Supabase)
+      const configRows = db.prepare(
+        "SELECT chave, valor FROM configuracoes_sistema WHERE chave != 'supabase_key' AND chave NOT LIKE 'assinatura_%' ORDER BY chave"
+      ).all() as { chave: string; valor: string }[]
+      const configuracoes = JSON.stringify(Object.fromEntries(configRows.map(r => [r.chave, r.valor])))
       db.prepare(`
         UPDATE estabelecimentos SET
           nome          = ?,
           cnpj          = ?,
           endereco      = ?,
           telefone      = ?,
+          configuracoes = ?,
           atualizado_em = ?,
           sincronizado  = 0
         WHERE id = ?
-      `).run(nome, cnpj || null, endereco || null, telefone1 || null, agora, estabId)
+      `).run(nome, cnpj || null, endereco || null, telefone1 || null, configuracoes, agora, estabId)
     }
 
     // 3. Se primeira_ativacao_em ainda não foi setada e cliente preencheu dados,

@@ -138,19 +138,6 @@ export async function pushToSupabase(
     const pushedKey = table === 'logs_auditoria' ? 'logs' : table
     pushed[pushedKey] = 0
     try {
-      if (table === 'estabelecimentos') {
-        const settings = getAllSettings(db)
-        const json = JSON.stringify(settings)
-        const currentEstabIdForConfig = getSetting('estabelecimento_id')
-        if (currentEstabIdForConfig) {
-          const current = (db.prepare('SELECT configuracoes FROM estabelecimentos WHERE id = ?').get(currentEstabIdForConfig) as any)?.configuracoes
-          if (current !== json) {
-            // WHERE id = ? garante que só atualiza a linha do cliente atual
-            db.prepare('UPDATE estabelecimentos SET configuracoes = ?, sincronizado = 0 WHERE id = ?').run(json, currentEstabIdForConfig)
-          }
-        }
-      }
-
       // Soft-delete tables: push deletado_em via PATCH to preserve FK references
       if (SOFT_DELETE_TABLES.has(table)) {
         const deleted = db.prepare(

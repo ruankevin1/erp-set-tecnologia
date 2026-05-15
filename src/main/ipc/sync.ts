@@ -273,13 +273,22 @@ export function registerSyncHandlers(ipcMain: IpcMain, db: Database.Database): v
         const estabs = await estabRes.json() as any[]
         if (estabs.length > 0) {
           const e = estabs[0]
-          // UPSERT com sincronizado=1: o master é a fonte de verdade, não tentamos fazer push desse registro
-          db.prepare(`
-            INSERT OR REPLACE INTO estabelecimentos
-              (id, nome, cnpj, telefone, endereco, ativo, sincronizado, criado_em, atualizado_em, primeira_ativacao_em)
-            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
-          `).run(e.id, e.nome, e.cnpj ?? null, e.telefone ?? null, e.endereco ?? null,
-                 e.ativo ?? 1, e.criado_em, e.atualizado_em, e.primeira_ativacao_em ?? null)
+          // UPDATE preserva configuracoes (snapshot de settings); INSERT OR IGNORE apenas se row não existe ainda
+          const upd = db.prepare(`
+            UPDATE estabelecimentos SET
+              nome=?, cnpj=?, telefone=?, endereco=?, ativo=?, sincronizado=1,
+              criado_em=?, atualizado_em=?, primeira_ativacao_em=?
+            WHERE id=?
+          `).run(e.nome, e.cnpj ?? null, e.telefone ?? null, e.endereco ?? null,
+                 e.ativo ?? 1, e.criado_em, e.atualizado_em, e.primeira_ativacao_em ?? null, e.id)
+          if ((upd as any).changes === 0) {
+            db.prepare(`
+              INSERT OR IGNORE INTO estabelecimentos
+                (id, nome, cnpj, telefone, endereco, ativo, sincronizado, criado_em, atualizado_em, primeira_ativacao_em)
+              VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+            `).run(e.id, e.nome, e.cnpj ?? null, e.telefone ?? null, e.endereco ?? null,
+                   e.ativo ?? 1, e.criado_em, e.atualizado_em, e.primeira_ativacao_em ?? null)
+          }
         }
       } else {
         // Fallback: garante linha local mesmo sem dados do Supabase
