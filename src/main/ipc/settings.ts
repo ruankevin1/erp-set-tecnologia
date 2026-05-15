@@ -49,16 +49,21 @@ export function registerSettingsHandlers(ipcMain: IpcMain, db: Database.Database
 
     // 2. Atualiza a linha de estabelecimentos (apenas campos editáveis pelo cliente)
     // ativo, criado_em, primeira_ativacao_em são controlados pelo master — nunca alterar localmente
+    // WHERE garante que só a linha deste estabelecimento seja atualizada (nunca linhas de outros UUIDs)
+    const estabId = (db.prepare('SELECT valor FROM configuracoes_sistema WHERE chave = ?').get('estabelecimento_id') as any)?.valor
     const agora = new Date().toISOString()
-    db.prepare(`
-      UPDATE estabelecimentos SET
-        nome          = ?,
-        cnpj          = ?,
-        endereco      = ?,
-        telefone      = ?,
-        atualizado_em = ?,
-        sincronizado  = 0
-    `).run(nome, cnpj || null, endereco || null, telefone1 || null, agora)
+    if (estabId) {
+      db.prepare(`
+        UPDATE estabelecimentos SET
+          nome          = ?,
+          cnpj          = ?,
+          endereco      = ?,
+          telefone      = ?,
+          atualizado_em = ?,
+          sincronizado  = 0
+        WHERE id = ?
+      `).run(nome, cnpj || null, endereco || null, telefone1 || null, agora, estabId)
+    }
 
     // 3. Se primeira_ativacao_em ainda não foi setada e cliente preencheu dados,
     //    notifica o Set ERP via endpoint dedicado (ele escreve a coluna com segurança)

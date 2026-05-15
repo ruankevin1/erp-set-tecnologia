@@ -173,9 +173,13 @@ export async function pushToSupabase(
         }
       }
 
-      const activeQuery = SOFT_DELETE_TABLES.has(table)
-        ? `SELECT * FROM ${table} WHERE sincronizado = 0 AND deletado_em IS NULL`
-        : `SELECT * FROM ${table} WHERE sincronizado = 0`
+      // Para estabelecimentos: só empurrar a linha do UUID atual (nunca linhas de outros clientes)
+      const currentEstabId = getSetting('estabelecimento_id')
+      const activeQuery = table === 'estabelecimentos'
+        ? `SELECT * FROM estabelecimentos WHERE sincronizado = 0${currentEstabId ? ` AND id = '${currentEstabId}'` : ''}`
+        : SOFT_DELETE_TABLES.has(table)
+          ? `SELECT * FROM ${table} WHERE sincronizado = 0 AND deletado_em IS NULL`
+          : `SELECT * FROM ${table} WHERE sincronizado = 0`
       const rows = db.prepare(activeQuery).all() as any[]
       if (rows.length === 0) continue
 
