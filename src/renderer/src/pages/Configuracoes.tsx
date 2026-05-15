@@ -18,7 +18,6 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { useToast } from '@/hooks/useToast'
 import type { UsuarioItem } from '@/types'
 import { cn } from '@/lib/utils'
-import { ESTABELECIMENTO_ID } from '@/lib/supabase'
 import { version } from '../../../../package.json'
 import type { FaixaIntermediaria, SyncPushResult } from '@/types'
 
@@ -86,7 +85,7 @@ export function Configuracoes() {
 }
 
 function ConfiguracoesContent() {
-  const { syncStatus, setSyncStatus, simulacaoImpressao, setSimulacaoImpressao, setNomeEstabelecimento } = useStore()
+  const { syncStatus, setSyncStatus, simulacaoImpressao, setSimulacaoImpressao, setNomeEstabelecimento, estabelecimentoId } = useStore()
   const { usuario } = useAuthStore()
   const [secoesAbertas, setSecoesAbertas] = useState({
     usuarios: false, estab: false, precos: false, impressora: false, ticket: false, supabase: false, sobre: false, ferramentas: false
@@ -204,7 +203,7 @@ function ConfiguracoesContent() {
 
   async function loadUsuarios() {
     setLoadingUsuarios(true)
-    const lista = await window.api.users.list(ESTABELECIMENTO_ID)
+    const lista = await window.api.users.list(estabelecimentoId)
     setUsuarios(lista as UsuarioItem[])
     setLoadingUsuarios(false)
   }
@@ -222,7 +221,7 @@ function ConfiguracoesContent() {
         if (!login.trim()) { setUserFormErro('Login obrigatório'); return }
         if (!senha) { setUserFormErro('Senha obrigatória'); return }
         if (senha !== confirmar) { setUserFormErro('Senhas não conferem'); return }
-        const res = await window.api.users.create({ estabelecimentoId: ESTABELECIMENTO_ID, nome, login, senha, perfil })
+        const res = await window.api.users.create({ estabelecimentoId: estabelecimentoId, nome, login, senha, perfil })
         if (!res.ok) { setUserFormErro(res.erro ?? 'Erro ao criar'); return }
       }
       await loadUsuarios()
@@ -312,7 +311,7 @@ function ConfiguracoesContent() {
   }
 
   async function loadPricing() {
-    const config = await window.api.pricing.get(ESTABELECIMENTO_ID)
+    const config = await window.api.pricing.get(estabelecimentoId)
     if (config) {
       setPrecoBase(config.valor_base)
       setMinutosBase(config.minutos_base)
@@ -324,7 +323,7 @@ function ConfiguracoesContent() {
       setValorBloco(config.valor_bloco)
       setMinutosPorBloco(config.minutos_por_bloco)
     }
-    const count = await window.api.pricing.activeCount(ESTABELECIMENTO_ID)
+    const count = await window.api.pricing.activeCount(estabelecimentoId)
     setVisitasAtivasCount(count)
   }
 
@@ -360,7 +359,7 @@ function ConfiguracoesContent() {
         ? sortedFaixas[sortedFaixas.length - 1].ate_minutos
         : minutosBase
       await window.api.pricing.save({
-        estabelecimentoId: ESTABELECIMENTO_ID,
+        estabelecimentoId: estabelecimentoId,
         nome: 'Padrão',
         valor_base: precoBase,
         minutos_base: minutosBase,
@@ -463,7 +462,7 @@ function ConfiguracoesContent() {
         responsavelTelefone: '(11) 99999-9999',
         entradaEm: new Date().toISOString(),
         ticketNumero: 1,
-        estabelecimentoId: ESTABELECIMENTO_ID,
+        estabelecimentoId: estabelecimentoId,
       })
       setPreviewContent(res.preview)
       setPreviewOpen(true)
@@ -476,7 +475,7 @@ function ConfiguracoesContent() {
   async function sincronizar() {
     setSyncLoading(true)
     try {
-      const res = await window.api.sync.fetchConfig(undefined, ESTABELECIMENTO_ID)
+      const res = await window.api.sync.fetchConfig(undefined, estabelecimentoId)
       if (res.success) {
         toast({ title: 'Sincronizado!', description: `${res.count} configurações de preço importadas.` })
         await loadSyncStatus()
@@ -510,7 +509,7 @@ function ConfiguracoesContent() {
     setPullLoading(true)
     setPullResult(null)
     try {
-      const res = await window.api.sync.pullAll(ESTABELECIMENTO_ID)
+      const res = await window.api.sync.pullAll(estabelecimentoId)
       if (!res.success) {
         toast({ title: 'Erro ao restaurar', description: res.error, variant: 'destructive' })
         return
@@ -551,7 +550,7 @@ function ConfiguracoesContent() {
     if (!limpezaNivel) return
     setLimpezaLoading(true)
     try {
-      const res = await window.api.data.cleanup(limpezaNivel, ESTABELECIMENTO_ID)
+      const res = await window.api.data.cleanup(limpezaNivel, estabelecimentoId)
       if (res.success) {
         toast({ title: 'Limpeza concluída com sucesso!' })
         setModalLimpezaAberto(false)
@@ -1342,7 +1341,7 @@ function ConfiguracoesContent() {
         {secoesAbertas.sobre && <CardContent className="text-sm text-muted-foreground space-y-3">
           <div className="space-y-1">
             <p>ERP Set Tecnologia <strong>v{version}</strong></p>
-            <p>Estabelecimento ID: <code className="text-xs bg-muted px-1 py-0.5 rounded">{ESTABELECIMENTO_ID}</code></p>
+            <p>Estabelecimento ID: <code className="text-xs bg-muted px-1 py-0.5 rounded">{estabelecimentoId}</code></p>
           </div>
           <Button variant="outline" size="sm" onClick={async () => {
             await window.api.updater?.checkNow?.()
