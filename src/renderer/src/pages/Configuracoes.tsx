@@ -59,6 +59,15 @@ function NumericInput({ value, onChange, decimal = false, className, ...props }:
   )
 }
 
+function maskPhone(raw: string): string {
+  const d = raw.replace(/\D/g, '').slice(0, 11)
+  if (d.length === 0) return ''
+  if (d.length <= 2) return `(${d}`
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  return `(${d.slice(0, 2)}) ${d[2]} ${d.slice(3, 7)}-${d.slice(7)}`
+}
+
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
@@ -285,8 +294,8 @@ function ConfiguracoesContent() {
     setEstabUnidade(all['ticket_unidade'] ?? '')
     setEstabCnpj(all['estabelecimento_cnpj'] ?? '')
     setEstabEndereco(all['estabelecimento_endereco'] ?? '')
-    setEstabTel1(all['estabelecimento_telefone1'] ?? '')
-    setEstabTel2(all['estabelecimento_telefone2'] ?? '')
+    setEstabTel1(maskPhone(all['estabelecimento_telefone1'] ?? ''))
+    setEstabTel2(maskPhone(all['estabelecimento_telefone2'] ?? ''))
 
     const pt = (all['printer_type'] ?? 'network') as 'usb' | 'network'
     setPrinterType(pt)
@@ -760,7 +769,7 @@ function ConfiguracoesContent() {
             </div>
             <div className="space-y-1.5">
               <Label>Telefone 1</Label>
-              <Input value={estabTel1} onChange={(e) => setEstabTel1(e.target.value)} placeholder="(00) 00000-0000" />
+              <Input value={estabTel1} onChange={(e) => setEstabTel1(maskPhone(e.target.value))} placeholder="(54) 9 9962-7609" inputMode="numeric" />
             </div>
           </div>
           <div className="space-y-1.5">
@@ -769,7 +778,7 @@ function ConfiguracoesContent() {
           </div>
           <div className="space-y-1.5">
             <Label>Telefone 2</Label>
-            <Input value={estabTel2} onChange={(e) => setEstabTel2(e.target.value)} placeholder="(00) 00000-0000" />
+            <Input value={estabTel2} onChange={(e) => setEstabTel2(maskPhone(e.target.value))} placeholder="(54) 9 9962-7609" inputMode="numeric" />
           </div>
           <Button onClick={salvarEstabelecimento} disabled={savingEstab}>
             <Save className="w-4 h-4 mr-2" />
