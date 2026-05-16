@@ -87,8 +87,15 @@ export function registerSettingsHandlers(ipcMain: IpcMain, db: Database.Database
               db.prepare('UPDATE estabelecimentos SET primeira_ativacao_em = ? WHERE 1=1').run(data.primeira_ativacao_em)
               console.log('[estabelecimento:save] primeira_ativacao_em:', data.primeira_ativacao_em)
             }
+            db.prepare("INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('ativacao_pendente', '0')").run()
+          } else {
+            db.prepare("INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('ativacao_pendente', '1')").run()
+            console.warn('[estabelecimento:save] endpoint ativar HTTP', r.status, '— retry agendado')
           }
-        }).catch(err => console.warn('[estabelecimento:save] endpoint ativar:', err.message))
+        }).catch(err => {
+          db.prepare("INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('ativacao_pendente', '1')").run()
+          console.warn('[estabelecimento:save] endpoint ativar:', err.message, '— retry agendado')
+        })
       }
     }
 

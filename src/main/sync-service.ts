@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, app } from 'electron'
 import Database from 'better-sqlite3'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './constants'
 
@@ -60,6 +60,8 @@ async function runSync(): Promise<void> {
 
   try {
     await pushToSupabase(_db, SUPABASE_URL, key, SUPABASE_ANON_KEY)
+    await updateSyncMeta(_db, key)
+    await retryAtivacaoPendente(_db, key)
   } catch (err) {
     console.error('[sync-service]', err)
   }
@@ -94,6 +96,64 @@ function getAllSettings(db: Database.Database): Record<string, string> {
     ).all() as { chave: string; valor: string }[]
     return Object.fromEntries(rows.map(r => [r.chave, r.valor]))
   } catch { return {} }
+}
+
+// Atualiza versao_app e ultimo_sync_em no Supabase após cada sync bem-sucedido
+async function updateSyncMeta(db: Database.Database, key: string): Promise<void> {
+  const estabId = getSetting('estabelecimento_id')
+  if (!estabId) return
+  try {
+    const versao = app.getVersion()
+    const agora = new Date().toISOString()
+    await fetch(`${SUPABASE_URL}/rest/v1/estabelecimentos?id=eq.${estabId}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify({ versao_app: versao, ultimo_sync_em: agora })
+    })
+  } catch (err: any) {
+    console.warn('[sync] updateSyncMeta:', err.message)
+  }
+}
+
+// Retry de primeira_ativacao_em quando o POST original falhou por falta de internet
+async function retryAtivacaoPendente(db: Database.Database, key: string): Promise<void> {
+  const pendente = getSetting('ativacao_pendente')
+  if (pendente !== '1') return
+
+  // Se Supabase já retornou primeira_ativacao_em em algum check, limpa a flag
+  const jaAtivado = (db.prepare('SELECT primeira_ativacao_em FROM estabelecimentos WHERE primeira_ativacao_em IS NOT NULL LIMIT 1').get() as any)
+  if (jaAtivado) {
+    db.prepare("INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('ativacao_pendente', '0')").run()
+    return
+  }
+
+  const cnpj = getSetting('estabelecimento_cnpj') ?? ''
+  const telefone = getSetting('estabelecimento_telefone1') ?? ''
+  const endereco = getSetting('estabelecimento_endereco') ?? ''
+  if (!cnpj && !telefone && !endereco) return
+
+  try {
+    const r = await fetch('https://erp.settecnologia.app.br/api/playkids/cliente/ativar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ cnpj, telefone, endereco })
+    })
+    if (r.ok) {
+      const data = await r.json() as any
+      if (data.primeira_ativacao_em) {
+        db.prepare('UPDATE estabelecimentos SET primeira_ativacao_em = ? WHERE 1=1').run(data.primeira_ativacao_em)
+      }
+      db.prepare("INSERT OR REPLACE INTO configuracoes_sistema (chave, valor) VALUES ('ativacao_pendente', '0')").run()
+      console.log('[sync] Retry ativacao_pendente: sucesso')
+    }
+  } catch (err: any) {
+    console.warn('[sync] Retry ativacao_pendente falhou:', err.message)
+  }
 }
 
 export function getPendentes(db: Database.Database): {

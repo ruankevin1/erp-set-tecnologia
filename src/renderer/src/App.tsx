@@ -19,7 +19,7 @@ function decodeJwt(jwt: string): Record<string, any> | null {
   try { return JSON.parse(atob(jwt.split('.')[1])) } catch { return null }
 }
 
-const CHECK_INTERVAL_MS = 60 * 60 * 1000 // 1 hora
+const CHECK_INTERVAL_MS = 5 * 60 * 1000 // 5 minutos
 
 export default function App() {
   const { refreshVisitas, refreshCaixa, refreshPricing, setSyncStatus, setIsSyncing, setIsOnline, setEstabelecimentoId, setAssinatura, assinaturaBloqueada } = useStore()
@@ -83,14 +83,19 @@ export default function App() {
     }
     const handleOffline = () => setIsOnline(false)
 
+    // Re-check ao voltar para a janela (minimizou, trocou de aba, etc.)
+    const handleVisibility = () => { if (!document.hidden) checkAssinatura(estabId) }
+
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
+    document.addEventListener('visibilitychange', handleVisibility)
 
     return () => {
       clearInterval(assinaturaInterval)
       removeStatusListener()
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [ativado, estabId])
 
