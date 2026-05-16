@@ -1,20 +1,27 @@
 import { Clock, AlertTriangle } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 
+const TELEFONE = '(54) 9 9297-7120'
+
 export function TrialBanner() {
   const { assinaturaStatus, assinaturaDiasRestantes } = useStore()
 
   if (assinaturaStatus !== 'trial') return null
 
   const dias = assinaturaDiasRestantes ?? 0
-  const critico = dias <= 2
+  const expirado = dias <= 0
+  const critico = dias <= 2 // inclui expirado
 
-  const texto =
-    dias <= 0
-      ? 'Seu período de teste encerrou'
-      : dias === 1
-      ? 'Último dia do período de teste'
-      : `${dias} dias restantes no período de teste`
+  let texto: string
+  if (expirado) {
+    texto = `Período de teste encerrou. Entre em contato para contratar: ${TELEFONE}.`
+  } else if (dias === 1) {
+    texto = `Último dia do período de teste. Entre em contato para contratar: ${TELEFONE}.`
+  } else if (critico) {
+    texto = `Faltam ${dias} dias do seu teste. Entre em contato para contratar: ${TELEFONE}.`
+  } else {
+    texto = `Restam ${dias} dias do seu período de teste. Em caso de dúvidas, fale com a Set Tecnologia: ${TELEFONE}.`
+  }
 
   return (
     <div className={`flex items-center gap-2 px-4 py-2 text-sm border-b ${
@@ -26,11 +33,7 @@ export function TrialBanner() {
         ? <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
         : <Clock className="w-4 h-4 shrink-0 text-amber-500" />
       }
-      <span>
-        <strong>{texto}</strong>
-        {' — '}
-        Entre em contato com a <strong>Set Tecnologia</strong> para continuar usando o sistema.
-      </span>
+      <span>{texto}</span>
     </div>
   )
 }
