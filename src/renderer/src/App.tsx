@@ -60,6 +60,23 @@ export default function App() {
     })
   }, [])
 
+  // Helper de teste — acessível via DevTools console:
+  //   window.__trial(10)   → trial com 10 dias restantes
+  //   window.__trial(1)    → crítico (último dia)
+  //   window.__trial(0)    → expirado (banner vermelho, sem bloqueio ainda)
+  //   window.__trial(-1)   → expirado + bloqueia (vai pra tela de bloqueio)
+  //   window.__ativo()     → volta ao estado ativo normal
+  useEffect(() => {
+    ;(window as any).__trial = (dias: number) => {
+      setAssinatura('trial', dias, dias < 0)
+      console.log(`[test] trial: ${dias} dias, bloqueado: ${dias < 0}`)
+    }
+    ;(window as any).__ativo = () => {
+      setAssinatura('ativo', null, false)
+      console.log('[test] estado: ativo')
+    }
+  }, [setAssinatura])
+
   useEffect(() => {
     if (!ativado) return
 
