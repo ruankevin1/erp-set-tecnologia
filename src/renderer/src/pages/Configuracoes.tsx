@@ -742,29 +742,34 @@ function ConfiguracoesContent() {
         {secoesAbertas.estab && <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <Label>Nome da empresa</Label>
-            <Input value={estabNome} onChange={(e) => setEstabNome(e.target.value)} placeholder="Play Kids Lazer Infantil" />
+            <Input value={estabNome} onChange={(e) => setEstabNome(e.target.value)} placeholder="Ex: PlayKids Lazer Infantil" />
           </div>
           <div className="space-y-1.5">
             <Label>Nome do local / unidade</Label>
-            <Input value={estabUnidade} onChange={(e) => setEstabUnidade(e.target.value)} placeholder="Master Sonda Shopping" />
+            <Input value={estabUnidade} onChange={(e) => setEstabUnidade(e.target.value)} placeholder="Ex: Unidade Centro, Shopping Abc..." />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>CNPJ</Label>
-              <Input value={estabCnpj} readOnly className="bg-muted/40 cursor-default" placeholder="Aguardando sincronização..." />
+              <Input
+                value={estabCnpj ? estabCnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : ''}
+                readOnly
+                className="bg-muted/40 cursor-default"
+                placeholder="Aguardando sincronização..."
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Telefone 1</Label>
-              <Input value={estabTel1} onChange={(e) => setEstabTel1(e.target.value)} placeholder="(00) 9999-9999" />
+              <Input value={estabTel1} onChange={(e) => setEstabTel1(e.target.value)} placeholder="(00) 00000-0000" />
             </div>
           </div>
           <div className="space-y-1.5">
             <Label>Endereço</Label>
-            <Input value={estabEndereco} onChange={(e) => setEstabEndereco(e.target.value)} placeholder="Rua Example, 123 – Bairro – Cidade/UF" />
+            <Input value={estabEndereco} onChange={(e) => setEstabEndereco(e.target.value)} placeholder="Rua, número – Bairro – Cidade/UF" />
           </div>
           <div className="space-y-1.5">
             <Label>Telefone 2</Label>
-            <Input value={estabTel2} onChange={(e) => setEstabTel2(e.target.value)} placeholder="(00) 9999-9999" />
+            <Input value={estabTel2} onChange={(e) => setEstabTel2(e.target.value)} placeholder="(00) 00000-0000" />
           </div>
           <Button onClick={salvarEstabelecimento} disabled={savingEstab}>
             <Save className="w-4 h-4 mr-2" />
